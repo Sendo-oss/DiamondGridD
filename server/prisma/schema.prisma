@@ -1,0 +1,122 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Component {
+  id          String   @id @default(cuid())
+  type        String
+  brand       String
+  model       String
+  price       Float
+  scoreGaming Int      @default(0)
+  scoreWork   Int      @default(0)
+  watt        Int?
+  meta        Json?
+  imageUrl    String?
+  stock       Int      @default(0)
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+
+  // ✅ relación inversa requerida por Prisma (OrderItem.component)
+  orderItems OrderItem[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("user") // admin | worker | user
+  createdAt DateTime @default(now())
+  provider  String   @default("local") // "local" | "google"
+  googleId  String?  @unique
+
+  builds Build[]
+
+  // ✅ relación inversa requerida por Prisma (Order.user)
+  orders Order[]
+}
+
+model Build {
+  id        String   @id @default(cuid())
+  name      String
+  budget    Float
+  purpose   String
+  parts     Json
+  total     Float
+  createdAt DateTime @default(now())
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  REJECTED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  DEPOSIT
+}
+
+model Order {
+  id     String      @id @default(cuid())
+  userId String
+  user   User        @relation(fields: [userId], references: [id])
+  status OrderStatus @default(PENDING_PAYMENT)
+
+  subtotal Float
+  shipping Float @default(0)
+  total    Float
+
+  notes     String? // ejemplo: "Entregar en..."
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items OrderItem[]
+
+  // ✅ 1 a 1 opcional (un pedido puede tener o no un pago aún)
+  payment Payment?
+}
+
+model OrderItem {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  componentId String
+  component   Component @relation(fields: [componentId], references: [id])
+
+  // snapshot del producto al momento de comprar (bien hecho ✅)
+  type  String
+  brand String
+  model String
+  price Float
+  qty   Int
+
+  imageUrl String?
+}
+
+model Payment {
+  id      String @id @default(cuid())
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  method     PaymentMethod @default(BANK_TRANSFER)
+  bank       String // "Pichincha" | "Produbanco" | "Guayaquil"
+  reference  String? // nro transferencia
+  holderName String?
+  paidAt     DateTime?
+  receiptUrl String? // /uploads/xxx.png
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

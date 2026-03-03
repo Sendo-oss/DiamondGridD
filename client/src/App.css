@@ -1,0 +1,224 @@
+/* App.css (limpio para apps con Tailwind + Layout propio) */
+/* App.css (fix ancho + responsive) */
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+#root {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+}
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}
+
+
+/* ===== Modal Pro (imagen + zoom + layout) ===== */
+.dg-modal-overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.65);
+  backdrop-filter: blur(10px);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: 24px;
+  z-index: 9999;
+}
+
+.dg-modal{
+  width: min(980px, calc(100vw - 32px));
+  max-height: min(86vh, 900px);
+  overflow: hidden;
+  border-radius: 22px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(10,16,25,.78);
+  box-shadow: 0 30px 80px rgba(0,0,0,.55);
+}
+
+.dg-modal-header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+
+.dg-modal-body{
+  display:grid;
+  grid-template-columns: 1.2fr .8fr;
+  gap: 14px;
+  padding: 16px 18px 18px;
+}
+
+@media (max-width: 900px){
+  .dg-modal-body{ grid-template-columns: 1fr; }
+}
+
+.dg-img-shell{
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.04);
+  overflow: hidden;
+  padding: 14px;
+}
+
+.dg-img-stage{
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(0,0,0,.35);
+  aspect-ratio: 16 / 10;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.dg-img{
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transform: scale(1);
+  transition: transform .25s ease;
+  will-change: transform;
+}
+
+.dg-img-stage:hover .dg-img{
+  transform: scale(1.12);
+}
+
+.dg-specs{
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.04);
+  padding: 14px;
+  overflow:auto;
+}
+
+.dg-kv{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px dashed rgba(255,255,255,.10);
+}
+
+.dg-kv:last-child{ border-bottom: 0; }
+
+.dg-pill{
+  display:inline-flex;
+  align-items:center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.04);
+  font-size: 12px;
+  color: rgba(255,255,255,.85);
+}
+
+.dg-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap: 10px;
+  border-radius: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  color: rgba(255,255,255,.90);
+  cursor:pointer;
+  transition: transform .08s ease, background .18s ease, border .18s ease;
+}
+
+.dg-btn:hover{
+  background: rgba(255,255,255,.10);
+}
+
+.dg-btn:active{
+  transform: scale(.98);
+}
+
+.dg-btn-primary{
+  background: linear-gradient(90deg, rgba(56,189,248,.35), rgba(59,130,246,.35));
+  border-color: rgba(56,189,248,.25);
+}
+
+.dg-btn-danger{
+  background: rgba(239,68,68,.12);
+  border-color: rgba(239,68,68,.25);
+  color: rgba(254,202,202,.95);
+}
+
+.dg-close{
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+}
+/* Fondo animado SOLO para HomePage */
+.home-animated-bg{
+  position: fixed;
+  inset: 0;
+  z-index: 0;              /* detrás del contenido */
+  pointer-events: none;
+  opacity: .22;            /* ajusta 0.12 - 0.35 a gusto */
+  filter: blur(0.5px);
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(34,211,238,.22), transparent 45%),
+    radial-gradient(circle at 80% 30%, rgba(56,189,248,.18), transparent 40%),
+    radial-gradient(circle at 55% 85%, rgba(34,211,238,.12), transparent 55%),
+    url("/hero-bg.png");
+  background-size: 900px 900px, 900px 900px, 1200px 1200px, 1400px auto;
+  background-repeat: no-repeat, no-repeat, no-repeat, repeat;
+  background-position: 0% 0%, 100% 0%, 50% 100%, 0% 0%;
+  animation: dg-pan 18s linear infinite;
+  mix-blend-mode: screen; /* look “neón” sobre oscuro */
+}
+
+@keyframes dg-pan {
+  0%   { background-position: 0% 0%, 100% 0%, 50% 100%, 0% 0%; }
+  50%  { background-position: 60% 25%, 40% 10%, 60% 80%, 40% 40%; }
+  100% { background-position: 0% 0%, 100% 0%, 50% 100%, 0% 0%; }
+}
