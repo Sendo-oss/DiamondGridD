@@ -7,6 +7,8 @@ import { WorkerDashboard } from "./pages/dash/WorkerDashboard";
 import { Protected } from "./pages/Protected";
 import { ComponentPage } from "./pages/ComponentPage";
 import { CheckoutPage } from "./pages/CheckoutPage";
+import ProfilePage from "./pages/ProfilePage";
+
 export default function AppRouter() {
   return (
     <Routes>
@@ -33,6 +35,7 @@ export default function AppRouter() {
           </Protected>
         }
       />
+      <Route path="/profile" element={<Protected><ProfilePage /></Protected>} />
       <Route path="/checkout" element={<CheckoutPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

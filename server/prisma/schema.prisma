@@ -24,6 +24,20 @@ model Component {
 
   // ✅ relación inversa requerida por Prisma (OrderItem.component)
   orderItems OrderItem[]
+
+  // ✅ GALERÍA (NUEVO) 1 a muchos
+  images ComponentImage[]
+}
+
+model ComponentImage {
+  id          String   @id @default(cuid())
+  componentId String
+  component   Component @relation(fields: [componentId], references: [id], onDelete: Cascade)
+
+  url       String   // /uploads/xxx.png
+  createdAt DateTime @default(now())
+
+  @@index([componentId])
 }
 
 model User {
@@ -35,6 +49,12 @@ model User {
   createdAt DateTime @default(now())
   provider  String   @default("local") // "local" | "google"
   googleId  String?  @unique
+
+  // ✅ PERFIL (nuevo)
+  nickname  String?
+  phone     String?
+  bio       String?
+  avatarUrl String?  // /uploads/xxx.png
 
   builds Build[]
 
@@ -77,13 +97,12 @@ model Order {
   shipping Float @default(0)
   total    Float
 
-  notes     String? // ejemplo: "Entregar en..."
+  notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   items OrderItem[]
 
-  // ✅ 1 a 1 opcional (un pedido puede tener o no un pago aún)
   payment Payment?
 }
 
@@ -95,7 +114,6 @@ model OrderItem {
   componentId String
   component   Component @relation(fields: [componentId], references: [id])
 
-  // snapshot del producto al momento de comprar (bien hecho ✅)
   type  String
   brand String
   model String
@@ -111,11 +129,11 @@ model Payment {
   order   Order  @relation(fields: [orderId], references: [id])
 
   method     PaymentMethod @default(BANK_TRANSFER)
-  bank       String // "Pichincha" | "Produbanco" | "Guayaquil"
-  reference  String? // nro transferencia
+  bank       String
+  reference  String?
   holderName String?
   paidAt     DateTime?
-  receiptUrl String? // /uploads/xxx.png
+  receiptUrl String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

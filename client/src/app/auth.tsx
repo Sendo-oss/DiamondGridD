@@ -1,8 +1,16 @@
 import React, { createContext, useContext, useMemo, useState } from "react";
 
 type Role = "admin" | "worker" | "user";
-type User = { id: string; name: string; email: string; role: Role };
-
+type User = {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  nickname?: string;
+  avatarUrl?: string;
+  phone?: string;
+  bio?: string;
+};
 type AuthState = {
   user: User | null;
   token: string | null;

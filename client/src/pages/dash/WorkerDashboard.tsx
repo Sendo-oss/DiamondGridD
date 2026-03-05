@@ -8,6 +8,7 @@ import {
   adminExportCSV,
   updateComponentStock,
   updateComponentStatus,
+  API_BASE,
 } from "../../lib/api";
 
 const TYPES = ["CPU", "GPU", "RAM", "SSD", "PSU", "MOBO", "CASE"] as const;
@@ -30,6 +31,9 @@ type FormState = {
 
   imageFile?: File | null;
   imagePreview?: string | null;
+
+  // ⭐ galería (Opción B)
+  galleryFiles?: File[];
 };
 
 const emptyForm: FormState = {
@@ -45,7 +49,31 @@ const emptyForm: FormState = {
   metaText: "",
   imageFile: null,
   imagePreview: null,
+  galleryFiles: [],
 };
+
+function authHeaders() {
+  const token = localStorage.getItem("dg_token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function uploadComponentGallery(componentId: string, files: File[]) {
+  const fd = new FormData();
+  for (const f of files) fd.append("images", f);
+
+  const r = await fetch(`${API_BASE}/api/components/${componentId}/images`, {
+    method: "POST",
+    headers: { ...authHeaders() },
+    body: fd,
+  });
+
+  const text = await r.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { ok: false, message: text || "Respuesta no-JSON del server" };
+  }
+}
 
 export function WorkerDashboard() {
   const [items, setItems] = useState<any[]>([]);
@@ -90,7 +118,8 @@ export function WorkerDashboard() {
       status: c.status === "inactive" ? "inactive" : "active",
       metaText: c.meta ? JSON.stringify(c.meta, null, 2) : "",
       imageFile: null,
-      imagePreview: c.imageUrl ? `http://localhost:4000${c.imageUrl}` : null,
+      imagePreview: c.imageUrl ? `${API_BASE}${c.imageUrl}` : null,
+      galleryFiles: [],
     });
     setMsg(null);
   }
@@ -111,7 +140,7 @@ export function WorkerDashboard() {
       try {
         metaObj = JSON.parse(metaRaw);
       } catch {
-        setMsg("❌ Características: JSON inválido. Ej: {\"socket\":\"AM4\"}");
+        setMsg('❌ Características: JSON inválido. Ej: {"socket":"AM4"}');
         return;
       }
     }
@@ -132,14 +161,29 @@ export function WorkerDashboard() {
       if (metaObj !== undefined) fd.append("meta", JSON.stringify(metaObj));
       if (form.imageFile) fd.append("image", form.imageFile);
 
+      let savedId = form.id;
+
       if (mode === "create") {
         const r = await createComponent(fd);
         if (r?.ok === false) throw new Error(r.message || "No se pudo crear");
+        savedId = r?.component?.id ?? r?.id ?? savedId;
         setMsg("✅ Componente creado");
       } else {
         const r = await updateComponent(form.id!, fd);
         if (r?.ok === false) throw new Error(r.message || "No se pudo actualizar");
         setMsg("✅ Componente actualizado");
+      }
+
+      // ⭐ subir galería
+      if (savedId && form.galleryFiles && form.galleryFiles.length > 0) {
+        const gr = await uploadComponentGallery(savedId, form.galleryFiles);
+        if (gr?.ok === false) {
+          setMsg((m) =>
+            `${m ?? "✅ Guardado."}\n⚠️ Galería no subida: ${gr.message || "revisa ruta /api/components/:id/images"}`
+          );
+        } else {
+          setMsg((m) => `${m ?? "✅ Guardado."}\n🖼️ Galería subida (${form.galleryFiles.length})`);
+        }
       }
 
       reset();
@@ -151,41 +195,52 @@ export function WorkerDashboard() {
 
   async function onDelete(id: string) {
     if (!confirm("¿Seguro que deseas eliminar este componente?")) return;
-    const r = await deleteComponent(id);
-    if (r?.ok === false) return alert(r.message || "No se pudo eliminar");
-    await load();
+    setMsg(null);
+    try {
+      const r = await deleteComponent(id);
+      if (r?.ok === false) throw new Error(r.message || "No se pudo eliminar");
+      setMsg("🗑️ Componente eliminado");
+      await load();
+    } catch (e: any) {
+      setMsg(`❌ ${e.message || "Error"}`);
+    }
   }
 
   async function quickStock(id: string, delta: number) {
-    const r = await updateComponentStock(id, delta);
-    if (r?.ok === false) return alert(r.message || "No se pudo actualizar stock");
-    await load();
+    try {
+      await updateComponentStock(id, delta);
+      await load();
+    } catch {
+      // ignore
+    }
   }
 
-  async function toggleStatus(id: string, current: Status) {
-    const next: Status = current === "active" ? "inactive" : "active";
-    const r = await updateComponentStatus(id, next);
-    if (r?.ok === false) return alert(r.message || "No se pudo cambiar estado");
-    await load();
+  async function toggleStatus(id: string, next: Status) {
+    try {
+      await updateComponentStatus(id, next);
+      await load();
+    } catch {
+      // ignore
+    }
   }
 
   return (
     <Layout>
-      <div className="grid gap-6">
+      <div className="mx-auto max-w-6xl space-y-6">
         <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-2xl font-semibold">Dashboard Worker</h2>
-              <p className="mt-1 text-white/70">Componentes + stock + estado + export CSV.</p>
+              <h2 className="text-xl font-semibold">Worker • Dashboard</h2>
+              <p className="text-sm text-white/60">Gestiona componentes y stock (sin herramientas admin).</p>
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex gap-2">
               <select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
-                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white/80 outline-none focus:border-diamond-300/40"
+                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none"
               >
-                <option value="ALL">Todos</option>
+                <option value="ALL">ALL</option>
                 {TYPES.map((t) => (
                   <option key={t} value={t}>{t}</option>
                 ))}
@@ -195,141 +250,135 @@ export function WorkerDashboard() {
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Buscar..."
-                className="w-full sm:w-[320px] rounded-xl border border-white/10 bg-white/5 px-4 py-2 outline-none focus:border-diamond-300/40"
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-diamond-300/40 sm:w-[260px]"
               />
             </div>
-          </div>
-
-          <div className="mt-4">
-            <button
-              onClick={async () => {
-                const blob = await adminExportCSV();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = "diamond-grid-components.csv";
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                URL.revokeObjectURL(url);
-              }}
-              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 font-semibold text-white/80 hover:bg-white/10"
-            >
-              Exportar CSV
-            </button>
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Form */}
+        <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+          {/* FORM */}
           <div className="rounded-3xl border border-white/10 bg-ink-900/60 p-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">{mode === "create" ? "Crear componente" : "Editar componente"}</h3>
-              {mode === "edit" && (
-                <button
-                  onClick={reset}
-                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
-                >
-                  Cancelar
-                </button>
-              )}
-            </div>
+            <h3 className="text-lg font-semibold">{mode === "create" ? "Crear componente" : "Editar componente"}</h3>
 
             {msg && (
-              <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-3 text-sm text-white/80">{msg}</div>
+              <pre className="mt-3 whitespace-pre-wrap rounded-2xl border border-white/10 bg-white/5 p-3 text-sm text-white/80">
+                {msg}
+              </pre>
             )}
 
-            <form onSubmit={onSubmit} className="mt-5 grid gap-3">
+            <form onSubmit={onSubmit} className="mt-4 grid gap-3">
               <div className="grid grid-cols-2 gap-2">
-                <select
-                  value={form.type}
-                  onChange={(e) => setForm((s) => ({ ...s, type: e.target.value }))}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none focus:border-diamond-300/40"
-                >
-                  {TYPES.map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-
-                <input
-                  value={form.watt ?? ""}
-                  onChange={(e) => setForm((s) => ({ ...s, watt: e.target.value === "" ? null : Number(e.target.value) }))}
-                  type="number"
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none focus:border-diamond-300/40"
-                  placeholder="Watts (opcional)"
-                />
+                <div>
+                  <label className="text-xs text-white/60">Tipo</label>
+                  <select
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none"
+                    value={form.type}
+                    onChange={(e) => setForm((s) => ({ ...s, type: e.target.value }))}
+                  >
+                    {TYPES.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-white/60">Estado</label>
+                  <select
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none"
+                    value={form.status}
+                    onChange={(e) => setForm((s) => ({ ...s, status: e.target.value as Status }))}
+                  >
+                    <option value="active">active</option>
+                    <option value="inactive">inactive</option>
+                  </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                <input
-                  value={form.brand}
-                  onChange={(e) => setForm((s) => ({ ...s, brand: e.target.value }))}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none focus:border-diamond-300/40"
-                  placeholder="Marca"
-                />
-                <input
-                  value={form.model}
-                  onChange={(e) => setForm((s) => ({ ...s, model: e.target.value }))}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none focus:border-diamond-300/40"
-                  placeholder="Modelo"
-                />
+                <div>
+                  <label className="text-xs text-white/60">Marca</label>
+                  <input
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none"
+                    value={form.brand}
+                    onChange={(e) => setForm((s) => ({ ...s, brand: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-white/60">Modelo</label>
+                  <input
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none"
+                    value={form.model}
+                    onChange={(e) => setForm((s) => ({ ...s, model: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-white/60">Precio</label>
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none"
+                    value={form.price}
+                    onChange={(e) => setForm((s) => ({ ...s, price: Number(e.target.value) }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-white/60">Stock</label>
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none"
+                    value={form.stock}
+                    onChange={(e) => setForm((s) => ({ ...s, stock: Number(e.target.value) }))}
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-3 gap-2">
-                <input
-                  value={form.price}
-                  onChange={(e) => setForm((s) => ({ ...s, price: Number(e.target.value) }))}
-                  type="number"
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none focus:border-diamond-300/40"
-                  placeholder="Precio"
-                />
-                <input
-                  value={form.scoreGaming}
-                  onChange={(e) => setForm((s) => ({ ...s, scoreGaming: Number(e.target.value) }))}
-                  type="number"
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none focus:border-diamond-300/40"
-                  placeholder="Gaming"
-                />
-                <input
-                  value={form.scoreWork}
-                  onChange={(e) => setForm((s) => ({ ...s, scoreWork: Number(e.target.value) }))}
-                  type="number"
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none focus:border-diamond-300/40"
-                  placeholder="Work"
-                />
+                <div>
+                  <label className="text-xs text-white/60">Gaming</label>
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none"
+                    value={form.scoreGaming}
+                    onChange={(e) => setForm((s) => ({ ...s, scoreGaming: Number(e.target.value) }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-white/60">Work</label>
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none"
+                    value={form.scoreWork}
+                    onChange={(e) => setForm((s) => ({ ...s, scoreWork: Number(e.target.value) }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-white/60">Watt</label>
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none"
+                    value={form.watt ?? ""}
+                    onChange={(e) => setForm((s) => ({ ...s, watt: e.target.value === "" ? null : Number(e.target.value) }))}
+                  />
+                </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  value={form.stock}
-                  onChange={(e) => setForm((s) => ({ ...s, stock: Number(e.target.value) }))}
-                  type="number"
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none focus:border-diamond-300/40"
-                  placeholder="Stock"
-                />
-                <select
-                  value={form.status}
-                  onChange={(e) => setForm((s) => ({ ...s, status: e.target.value as Status }))}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none focus:border-diamond-300/40"
-                >
-                  <option value="active">Activo</option>
-                  <option value="inactive">Inactivo</option>
-                </select>
-              </div>
-
-              <textarea
-                value={form.metaText}
-                onChange={(e) => setForm((s) => ({ ...s, metaText: e.target.value }))}
-                rows={4}
-                className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-diamond-300/40"
-                placeholder='Características (JSON). Ej: {"socket":"AM4","vram":"8GB"}'
-              />
 
               <div>
+                <label className="text-xs text-white/60">Características (JSON)</label>
+                <textarea
+                  className="mt-1 min-h-[110px] w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs outline-none focus:border-diamond-300/40"
+                  value={form.metaText}
+                  onChange={(e) => setForm((s) => ({ ...s, metaText: e.target.value }))}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-white/60">Imagen principal</label>
                 <input
                   type="file"
                   accept="image/*"
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none focus:border-diamond-300/40"
+                  className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm"
                   onChange={(e) => {
                     const file = e.target.files?.[0] ?? null;
                     setForm((s) => ({
@@ -346,13 +395,58 @@ export function WorkerDashboard() {
                 )}
               </div>
 
-              <button className="mt-2 rounded-xl bg-gradient-to-r from-diamond-400 to-diamond-600 px-4 py-2 font-semibold shadow-glow">
-                {mode === "create" ? "Crear" : "Guardar cambios"}
+              {/* ⭐ GALERÍA */}
+              <div>
+                <label className="text-xs text-white/60">Galería (varias imágenes)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files ?? []);
+                    setForm((s) => ({ ...s, galleryFiles: files }));
+                  }}
+                />
+                <p className="mt-1 text-xs text-white/50">
+                  POST /api/components/:id/images (si no existe aún, te avisará).
+                </p>
+              </div>
+
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <button className="rounded-xl bg-gradient-to-r from-diamond-400 to-diamond-600 px-4 py-2 font-semibold shadow-glow">
+                  {mode === "create" ? "Crear" : "Guardar cambios"}
+                </button>
+                <button
+                  type="button"
+                  onClick={reset}
+                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 font-semibold text-white/80 hover:bg-white/10"
+                >
+                  Limpiar
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  const blob = await adminExportCSV();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "diamond-grid-components.csv";
+                  document.body.appendChild(a);
+                  a.click();
+                  a.remove();
+                  URL.revokeObjectURL(url);
+                }}
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 font-semibold text-white/80 hover:bg-white/10"
+              >
+                Export CSV
               </button>
             </form>
           </div>
 
-          {/* List */}
+          {/* LIST */}
           <div className="rounded-3xl border border-white/10 bg-ink-900/60 p-6">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">Componentes</h3>
@@ -419,7 +513,7 @@ export function WorkerDashboard() {
 
                       {c.imageUrl && (
                         <img
-                          src={`http://localhost:4000${c.imageUrl}`}
+                          src={`${API_BASE}${c.imageUrl}`}
                           alt={`${c.brand} ${c.model}`}
                           className="mt-3 h-28 w-full rounded-2xl object-cover border border-white/10"
                         />

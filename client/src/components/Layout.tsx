@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useMemo } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../app/auth";
 import { useCart } from "../app/cart";
@@ -11,12 +11,22 @@ export function Layout({ children }: { children: ReactNode }) {
 
   const cart = useCart();
   const isStaff = user?.role === "admin" || user?.role === "worker";
+  const canShowCart = useMemo(() => !isStaff, [isStaff]);
+
+  // 🔎 search UI (solo frontend). Navega a "/?q=..."
+  const [q, setQ] = useState("");
+  function doSearch() {
+    const term = q.trim();
+    if (!term) return;
+    nav(`/?q=${encodeURIComponent(term)}`);
+  }
 
   // ✅ Si el usuario es staff, ocultamos y limpiamos el carrito
   useEffect(() => {
     if (!isStaff) return;
     cart.setOpen(false);
     cart.clear();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStaff]); // (no pongas cart aquí para evitar renders raros)
 
   // ✅ FIX: si ya estás logueado y estás en /login o /register, redirige por rol
@@ -25,15 +35,12 @@ export function Layout({ children }: { children: ReactNode }) {
 
     const p = location.pathname;
     const isAuthPage = p === "/login" || p === "/register";
-
     if (!isAuthPage) return;
 
     if (user.role === "admin") nav("/admin", { replace: true });
     else if (user.role === "worker") nav("/worker", { replace: true });
     else nav("/", { replace: true });
   }, [user, location.pathname, nav]);
-
-  const canShowCart = useMemo(() => !isStaff, [isStaff]);
 
   return (
     <div className="min-h-screen bg-ink-950 text-white">
@@ -45,88 +52,181 @@ export function Layout({ children }: { children: ReactNode }) {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(34,211,238,0.10)_1px,transparent_0)] [background-size:22px_22px]" />
       </div>
 
+      {/* HEADER PRO */}
       <header className="relative z-10 border-b border-white/10">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Link to="/" className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-diamond-300 to-diamond-600 shadow-glow" />
-            <div>
-              <p className="text-sm text-white/70">Sistema de Componentes</p>
-              <h1 className="text-lg font-semibold tracking-wide">Diamond Grid</h1>
+        {/* TOPBAR */}
+        <div className="border-b border-white/10 bg-black/20">
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-2 text-xs text-white/70">
+            <div className="flex items-center gap-4">
+              {/* No rompo rutas: si no existen, no navego. (Puedes activarlas luego) */}
+              <span className="cursor-default hover:text-white">Preguntas Frecuentes</span>
+              <span className="cursor-default hover:text-white">Contacto</span>
+              <span className="cursor-default hover:text-white">Trackeo de Pedidos</span>
             </div>
-          </Link>
 
-          {/* ✅ DERECHA */}
-          <div className="flex items-center gap-2 text-sm">
-            {/* 🛒 Carrito (solo si NO es staff) */}
-            {canShowCart && (
-              <button
-                onClick={() => cart.setOpen(true)}
-                className="relative rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white/80 hover:bg-white/10"
-                title="Carrito"
-              >
-                <span className="mr-2">🛒</span>
-                <span className="font-semibold">Carrito</span>
+            <div className="flex items-center gap-2">
+              <span className="text-red-400">✓</span>
+              <span>Los mejores precios del mercado</span>
+            </div>
+          </div>
+        </div>
 
-                {cart.count > 0 && (
-                  <span className="absolute -right-2 -top-2 rounded-full bg-diamond-500 px-2 py-0.5 text-xs font-bold text-white shadow-glow">
-                    {cart.count}
-                  </span>
-                )}
-              </button>
-            )}
+        {/* HEADER PRINCIPAL */}
+        <div className="bg-ink-950/40 backdrop-blur-xl">
+          <div className="mx-auto grid max-w-6xl grid-cols-1 gap-3 px-6 py-4 md:grid-cols-[auto_1fr_auto] md:items-center">
+            {/* Logo */}
+            <Link to="/" className="flex items-center gap-3">
+              <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-diamond-300 to-diamond-600 shadow-glow" />
+              <div>
+                <p className="text-xs text-white/60">Sistema de Componentes</p>
+                <h1 className="text-lg font-semibold tracking-wide">Diamond Grid</h1>
+              </div>
+            </Link>
 
-            {!user ? (
-              <>
-                <Link
-                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white/80 hover:bg-white/10"
-                  to="/login"
-                >
-                  Iniciar sesión
-                </Link>
-                <Link
-                  className="rounded-xl bg-gradient-to-r from-diamond-400 to-diamond-600 px-3 py-2 font-semibold shadow-glow"
-                  to="/register"
-                >
-                  Registrarse
-                </Link>
-              </>
-            ) : (
-              <>
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-white/80">
-                  {user.name} • {user.role}
-                </span>
-
-                {user.role === "admin" && (
-                  <button
-                    onClick={() => nav("/admin")}
-                    className="rounded-xl border border-diamond-300/20 bg-diamond-500/10 px-3 py-2 text-white/90 hover:bg-diamond-500/20"
-                  >
-                    Dashboard
-                  </button>
-                )}
-
-                {user.role === "worker" && (
-                  <button
-                    onClick={() => nav("/worker")}
-                    className="rounded-xl border border-diamond-300/20 bg-diamond-500/10 px-3 py-2 text-white/90 hover:bg-diamond-500/20"
-                  >
-                    Panel
-                  </button>
-                )}
-
-                <button
-                  onClick={() => {
-                    cart.setOpen(false);
-                    cart.clear(); // ✅ borrar carrito al cerrar sesión
-                    logout();
-                    nav("/");
+            {/* Buscador */}
+            <div className="md:px-6">
+              <div className="flex items-center overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+                <input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") doSearch();
                   }}
-                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white/80 hover:bg-white/10"
+                  placeholder="Buscar productos..."
+                  className="w-full bg-transparent px-4 py-3 text-sm text-white/90 outline-none placeholder:text-white/40"
+                />
+                <button
+                  onClick={doSearch}
+                  className="px-4 py-3 text-white/80 hover:text-white"
+                  title="Buscar"
                 >
-                  Salir
+                  🔎
                 </button>
-              </>
-            )}
+              </div>
+              <p className="mt-1 text-[11px] text-white/40">
+                Tip: escribe marca o modelo (ej: Ryzen, RTX, Kingston…)
+              </p>
+            </div>
+
+            {/* Acciones derecha */}
+            <div className="flex items-center justify-between gap-2 md:justify-end">
+              {/* 🛒 Carrito (solo si NO es staff) */}
+              {canShowCart && (
+                <button
+                  onClick={() => cart.setOpen(true)}
+                  className="relative rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+                  title="Carrito"
+                >
+                  🛒
+                  {cart.count > 0 && (
+                    <span className="absolute -right-2 -top-2 rounded-full bg-diamond-500 px-2 py-0.5 text-[11px] font-bold text-white shadow-glow">
+                      {cart.count}
+                    </span>
+                  )}
+                </button>
+              )}
+
+              {!user ? (
+                <>
+                  <Link
+                    className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+                    to="/login"
+                  >
+                    Iniciar sesión
+                  </Link>
+                  <Link
+                    className="rounded-2xl bg-gradient-to-r from-diamond-400 to-diamond-600 px-3 py-2 text-sm font-semibold shadow-glow"
+                    to="/register"
+                  >
+                    Registrarse
+                  </Link>
+                </>
+              ) : (
+                <>
+                  {/* Perfil (avatar + nickname) */}
+                  <Link
+                    to="/profile"
+                    className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+                    title="Ir a mi perfil"
+                  >
+                    {(user as any).avatarUrl ? (
+                      <img
+                        src={`${API_BASE}${(user as any).avatarUrl}`}
+                        alt="avatar"
+                        className="h-7 w-7 rounded-full object-cover border border-white/20"
+                      />
+                    ) : (
+                      <div className="h-7 w-7 rounded-full border border-white/20 bg-white/10 grid place-items-center text-xs font-bold">
+                        {(String((user as any).nickname || user.name || "U")[0] || "U").toUpperCase()}
+                      </div>
+                    )}
+
+                    <span className="hidden sm:block max-w-[140px] truncate">
+                      {(user as any).nickname ? `@${(user as any).nickname}` : user.name}
+                    </span>
+
+                    <span className="hidden md:inline text-white/50">•</span>
+                    <span className="hidden md:inline text-xs text-white/60">{user.role}</span>
+                  </Link>
+
+                  {/* Staff buttons */}
+                  {user.role === "admin" && (
+                    <button
+                      onClick={() => nav("/admin")}
+                      className="rounded-2xl border border-diamond-300/20 bg-diamond-500/10 px-3 py-2 text-sm text-white/90 hover:bg-diamond-500/20"
+                    >
+                      Dashboard
+                    </button>
+                  )}
+
+                  {user.role === "worker" && (
+                    <button
+                      onClick={() => nav("/worker")}
+                      className="rounded-2xl border border-diamond-300/20 bg-diamond-500/10 px-3 py-2 text-sm text-white/90 hover:bg-diamond-500/20"
+                    >
+                      Panel
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      cart.setOpen(false);
+                      cart.clear();
+                      logout();
+                      nav("/");
+                    }}
+                    className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+                  >
+                    Salir
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* NAVBAR */}
+        <div className="border-t border-white/10 bg-black/15">
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
+            <button
+              className="flex items-center gap-2 rounded-xl bg-diamond-600/20 px-4 py-2 text-sm font-semibold text-white hover:bg-diamond-600/30"
+              title="Categorías (próximamente)"
+            >
+              ☰ Categorías
+            </button>
+
+            {/* Links (si no tienes rutas, déjalos como texto por ahora) */}
+            <nav className="hidden md:flex items-center gap-6 text-sm text-white/80">
+              <Link to="/" className="hover:text-white">Tienda</Link>
+              <span className="cursor-default hover:text-white">Noticias</span>
+              <span className="cursor-default hover:text-white">Nosotros</span>
+              <span className="cursor-default hover:text-white">Contacto</span>
+              <span className="cursor-default text-diamond-200 hover:text-white">🔥 Ofertas</span>
+            </nav>
+
+            <div className="hidden md:block text-xs text-white/60">
+              {user ? `Rol: ${user.role}` : "Invitado"}
+            </div>
           </div>
         </div>
       </header>

@@ -1,7 +1,6 @@
 const API = "http://localhost:4000/api";
 export const API_BASE = "http://localhost:4000";
 
-
 function authHeaders() {
   const token = localStorage.getItem("dg_token");
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -91,7 +90,6 @@ export async function adminSeed() {
   return r.json();
 }
 
-// (si no tienes la ruta reset en backend, puedes eliminar esta función o crear la ruta)
 export async function adminResetComponents() {
   const r = await fetch(`${API}/admin/components/reset`, {
     method: "DELETE",
@@ -105,6 +103,7 @@ export async function adminExportCSV() {
   const blob = await r.blob();
   return blob;
 }
+
 export async function updateComponentStock(id: string, delta: number) {
   const r = await fetch(`${API}/components/${id}/stock`, {
     method: "PATCH",
@@ -122,35 +121,20 @@ export async function updateComponentStatus(id: string, status: "active" | "inac
   });
   return r.json();
 }
+
 export async function fetchComponentById(id: string) {
   const r = await fetch(`${API}/components/${id}`);
   return r.json();
 }
-export const patchStock = updateComponentStock;
-export const patchStatus = updateComponentStatus;
 
-export const changeComponentStock = updateComponentStock;
-export const changeComponentStatus = updateComponentStatus;
-export async function createOrder(payload: {
-  method: "BANK_TRANSFER" | "DEPOSIT";
-  bank: string;
-  reference?: string;
-  holderName?: string;
-  notes?: string;
-  items: Array<{ id: string; qty: number }>;
-}) {
-  const r = await fetch(`${API}/orders`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify(payload),
-  });
-  return r.json();
-}
-
-export async function uploadOrderReceipt(orderId: string, file: File) {
+// =====================
+// ✅ GALERÍA DE IMÁGENES (NUEVO)
+// =====================
+export async function uploadComponentImages(componentId: string, files: File[]) {
   const fd = new FormData();
-  fd.append("receipt", file);
-  const r = await fetch(`${API}/orders/${orderId}/receipt`, {
+  for (const f of files) fd.append("images", f);
+
+  const r = await fetch(`${API}/components/${componentId}/images`, {
     method: "POST",
     headers: { ...authHeaders() },
     body: fd,
@@ -158,15 +142,44 @@ export async function uploadOrderReceipt(orderId: string, file: File) {
   return r.json();
 }
 
-export async function fetchMyOrders() {
-  const r = await fetch(`${API}/orders/me`, { headers: { ...authHeaders() } });
+export async function deleteComponentImage(componentId: string, imageId: string) {
+  const r = await fetch(`${API}/components/${componentId}/images/${imageId}`, {
+    method: "DELETE",
+    headers: { ...authHeaders() },
+  });
   return r.json();
 }
-export async function authGoogle(idToken: string) {
-  const r = await fetch(`${API}/auth/google`, {
+
+// =====================
+// PERFIL (ME)
+// =====================
+export async function fetchMe() {
+  const r = await fetch(`${API}/me`, { headers: { ...authHeaders() } });
+  return r.json();
+}
+
+export async function updateMe(payload: {
+  name?: string;
+  nickname?: string;
+  phone?: string;
+  bio?: string;
+}) {
+  const r = await fetch(`${API}/me`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  return r.json();
+}
+
+export async function uploadAvatar(file: File) {
+  const fd = new FormData();
+  fd.append("avatar", file);
+
+  const r = await fetch(`${API}/me/avatar`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ idToken }),
+    headers: { ...authHeaders() },
+    body: fd,
   });
   return r.json();
 }

@@ -14,6 +14,18 @@ function signToken(payload: { id: string; role: string }) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
 }
 
+// ✅ Select único para devolver siempre el mismo shape de user
+const USER_SELECT = {
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  nickname: true,
+  phone: true,
+  bio: true,
+  avatarUrl: true,
+} as const;
+
 // -------------------
 // REGISTER / LOGIN
 // -------------------
@@ -36,7 +48,7 @@ export async function register(req: Request, res: Response) {
 
   const user = await prisma.user.create({
     data: { name, email, password: hash, role: "user" },
-    select: { id: true, name: true, email: true, role: true },
+    select: USER_SELECT,
   });
 
   const token = signToken({ id: user.id, role: user.role });
@@ -54,15 +66,21 @@ export async function login(req: Request, res: Response) {
 
   const { email, password } = parsed.data;
 
-  const userDb = await prisma.user.findUnique({ where: { email } });
+  // ✅ Traemos el usuario con password para validar, pero devolvemos el SELECT pro
+  const userDb = await prisma.user.findUnique({
+    where: { email },
+    select: { ...USER_SELECT, password: true },
+  });
+
   if (!userDb) return res.status(400).json({ ok: false, message: "Credenciales inválidas" });
 
   const ok = await bcrypt.compare(password, userDb.password);
   if (!ok) return res.status(400).json({ ok: false, message: "Credenciales inválidas" });
 
-  const user = { id: userDb.id, name: userDb.name, email: userDb.email, role: userDb.role as any };
-  const token = signToken({ id: user.id, role: user.role });
+  // ✅ Quitamos password del response
+  const { password: _pw, ...user } = userDb;
 
+  const token = signToken({ id: user.id, role: user.role });
   return res.json({ ok: true, user, token });
 }
 
@@ -124,9 +142,9 @@ export async function googleLogin(req: Request, res: Response) {
     const name = payload.name || email.split("@")[0];
 
     // Si no existe, lo creamos. Como tu schema exige password, guardamos uno random hasheado.
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await prisma.user.findUnique({ where: { email }, select: USER_SELECT });
 
-    const userDb =
+    const user =
       existing ??
       (await prisma.user.create({
         data: {
@@ -135,13 +153,12 @@ export async function googleLogin(req: Request, res: Response) {
           role: "user",
           password: await bcrypt.hash(`google_${Date.now()}_${Math.random()}`, 10),
         },
+        select: USER_SELECT,
       }));
 
-    const user = { id: userDb.id, name: userDb.name, email: userDb.email, role: userDb.role as any };
     const token = signToken({ id: user.id, role: user.role });
-
     return res.json({ ok: true, user, token });
-  } catch (e) {
+  } catch {
     return res.status(401).json({ ok: false, message: "Google credential inválida" });
   }
 }
