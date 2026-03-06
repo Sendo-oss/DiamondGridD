@@ -1,25 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { Layout } from "../components/Layout";
 import { API_BASE, fetchComponentById } from "../lib/api";
 import { useCart } from "../app/cart";
 
-function cls(...xs: Array<string | false | undefined | null>) {
-  return xs.filter(Boolean).join(" ");
-}
-
-function toAbsUrl(u: string) {
-  // Si ya es absoluta, se deja
-  if (/^https?:\/\//i.test(u)) return u;
-  // Si viene como "/uploads/xxx.png" => API_BASE + "/uploads/..."
-  if (u.startsWith("/")) return `${API_BASE}${u}`;
-  // Si viene "uploads/xxx.png" => API_BASE + "/uploads/..."
-  return `${API_BASE}/${u}`;
-}
-
 function money(n: any) {
   const x = Number(n ?? 0);
   return `$${x.toFixed(2)}`;
+}
+
+function toAbsUrl(u: string) {
+  if (/^https?:\/\//i.test(u)) return u;
+  if (u.startsWith("/")) return `${API_BASE}${u}`;
+  return `${API_BASE}/${u}`;
 }
 
 function Stars({ value = 4.7 }: { value?: number }) {
@@ -33,7 +26,7 @@ function Stars({ value = 4.7 }: { value?: number }) {
           const filled = idx <= full;
           const isHalf = idx === full + 1 && half;
           return (
-            <span key={i} className={cls("text-sm", filled || isHalf ? "" : "opacity-30")}>
+            <span key={i} className={`text-sm ${filled || isHalf ? "" : "opacity-30"}`}>
               ★
             </span>
           );
@@ -52,7 +45,6 @@ export function ComponentPage() {
   const [item, setItem] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // Imagen seleccionada (galería)
   const [activeImg, setActiveImg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -63,28 +55,56 @@ export function ComponentPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  // ✅ Galería: soporta imageUrl principal + arrays opcionales (images / gallery / meta.gallery)
+  // ✅ CAMBIO IMPORTANTE:
+  // Soporta:
+  // 1) imageUrl principal
+  // 2) images desde DB como [{ id, url }]
+  // 3) gallery como array de strings
+  // 4) meta.gallery como array de strings
   const gallery = useMemo(() => {
     const list: string[] = [];
 
-    if (item?.imageUrl) list.push(toAbsUrl(item.imageUrl));
+    if (item?.imageUrl && typeof item.imageUrl === "string") {
+      list.push(toAbsUrl(item.imageUrl));
+    }
 
-    // Opcionales:
-    const imgs1 = Array.isArray(item?.images) ? item.images : [];
-    const imgs2 = Array.isArray(item?.gallery) ? item.gallery : [];
-    const imgs3 = Array.isArray(item?.meta?.gallery) ? item.meta.gallery : [];
+    if (Array.isArray(item?.images)) {
+      for (const img of item.images) {
+        if (!img) continue;
 
-    for (const u of [...imgs1, ...imgs2, ...imgs3]) {
-      if (!u) continue;
-      const abs = toAbsUrl(String(u));
-      if (!list.includes(abs)) list.push(abs);
+        if (typeof img === "string") {
+          const abs = toAbsUrl(img);
+          if (!list.includes(abs)) list.push(abs);
+          continue;
+        }
+
+        if (typeof img === "object" && typeof img.url === "string") {
+          const abs = toAbsUrl(img.url);
+          if (!list.includes(abs)) list.push(abs);
+        }
+      }
+    }
+
+    if (Array.isArray(item?.gallery)) {
+      for (const u of item.gallery) {
+        if (!u || typeof u !== "string") continue;
+        const abs = toAbsUrl(u);
+        if (!list.includes(abs)) list.push(abs);
+      }
+    }
+
+    if (Array.isArray(item?.meta?.gallery)) {
+      for (const u of item.meta.gallery) {
+        if (!u || typeof u !== "string") continue;
+        const abs = toAbsUrl(u);
+        if (!list.includes(abs)) list.push(abs);
+      }
     }
 
     return list;
   }, [item]);
 
   useEffect(() => {
-    // setea la primera imagen disponible cuando cambie el item
     if (gallery.length > 0) setActiveImg(gallery[0]);
     else setActiveImg(null);
   }, [gallery]);
@@ -92,9 +112,7 @@ export function ComponentPage() {
   const metaEntries = useMemo(() => {
     const meta = item?.meta;
     if (!meta || typeof meta !== "object") return [];
-    // Quitamos gallery si existe para que no salga duplicada como spec
-    const entries = Object.entries(meta).filter(([k]) => k !== "gallery" && k !== "images");
-    return entries;
+    return Object.entries(meta).filter(([k]) => k !== "gallery" && k !== "images");
   }, [item]);
 
   if (loading) {
@@ -129,9 +147,8 @@ export function ComponentPage() {
 
   return (
     <Layout>
-      {/* Breadcrumbs */}
       <div className="mb-4 text-sm text-white/60">
-        <Link to="/" className="hover:text-white">Inicio</Link>
+        <span onClick={() => nav("/")} className="cursor-pointer hover:text-white">Inicio</span>
         <span className="mx-2">/</span>
         <span className="text-white/80">{item.type}</span>
         <span className="mx-2">/</span>
@@ -139,29 +156,29 @@ export function ComponentPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.25fr_1fr]">
-        {/* ===== IZQUIERDA: GALERÍA AMAZON ===== */}
+        {/* IZQUIERDA */}
         <div className="rounded-3xl border border-white/10 bg-ink-900/60 p-4">
           <div className="grid gap-4 md:grid-cols-[84px_1fr]">
-            {/* Thumbs */}
+            {/* Miniaturas */}
             <div className="order-2 flex gap-2 md:order-1 md:flex-col">
               {(gallery.length ? gallery : [null]).map((g, idx) => (
                 <button
                   key={idx}
                   onClick={() => g && setActiveImg(g)}
-                  className={cls(
+                  className={[
                     "h-16 w-16 overflow-hidden rounded-2xl border bg-black/30",
                     g && activeImg === g
                       ? "border-diamond-300/40 ring-2 ring-diamond-500/20"
                       : "border-white/10 hover:border-white/20",
-                    !g && "opacity-60 cursor-default"
-                  )}
+                    !g ? "opacity-60 cursor-default" : "",
+                  ].join(" ")}
                   title={g ? `Imagen ${idx + 1}` : "Sin imagen"}
                 >
                   {g ? (
                     <img
                       src={g}
                       alt={`thumb ${idx + 1}`}
-                      className="h-full w-full object-contain p-2"
+                      className="h-full w-full object-contain p-1"
                       draggable={false}
                     />
                   ) : (
@@ -173,14 +190,14 @@ export function ComponentPage() {
               ))}
             </div>
 
-            {/* Main image */}
+            {/* Imagen grande */}
             <div className="order-1 md:order-2">
-              <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-black/30">
+              <div className="relative flex items-center justify-center overflow-hidden rounded-3xl border border-white/10 bg-black/30">
                 {activeImg ? (
                   <img
                     src={activeImg}
                     alt={`${item.brand} ${item.model}`}
-                    className="h-[420px] w-full object-contain p-6 transition-transform duration-200 hover:scale-[1.02]"
+                    className="h-[420px] w-full object-contain p-10 mx-auto transition-transform duration-200 hover:scale-[1.02]"
                     draggable={false}
                   />
                 ) : (
@@ -189,22 +206,20 @@ export function ComponentPage() {
                   </div>
                 )}
 
-                {/* Badge tipo */}
                 <div className="absolute left-4 top-4 flex flex-wrap gap-2">
                   <span className="rounded-full border border-diamond-300/20 bg-diamond-500/10 px-3 py-1 text-xs text-white/80">
                     {item.type}
                   </span>
-                  {inactive && (
+
+                  {inactive ? (
                     <span className="rounded-full border border-red-400/20 bg-red-500/10 px-3 py-1 text-xs text-red-200">
                       Inactivo
                     </span>
-                  )}
-                  {!inactive && stock <= 0 && (
+                  ) : stock <= 0 ? (
                     <span className="rounded-full border border-red-400/20 bg-red-500/10 px-3 py-1 text-xs text-red-200">
                       Sin stock
                     </span>
-                  )}
-                  {!inactive && stock > 0 && (
+                  ) : (
                     <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">
                       Stock {stock}
                     </span>
@@ -219,7 +234,7 @@ export function ComponentPage() {
           </div>
         </div>
 
-        {/* ===== DERECHA: PANEL INFO (STICKY) ===== */}
+        {/* DERECHA */}
         <div className="lg:sticky lg:top-24 h-fit rounded-3xl border border-white/10 bg-ink-900/60 p-6">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -263,7 +278,7 @@ export function ComponentPage() {
 
               <div className="text-right">
                 <p className="text-xs text-white/60">Stock</p>
-                <p className={cls("text-sm font-semibold", outOfStock ? "text-red-200" : "text-emerald-200")}>
+                <p className={`text-sm font-semibold ${outOfStock ? "text-red-200" : "text-emerald-200"}`}>
                   {outOfStock ? "No disponible" : `${stock} disponible(s)`}
                 </p>
               </div>
@@ -304,12 +319,12 @@ export function ComponentPage() {
                     1
                   );
                 }}
-                className={cls(
+                className={[
                   "w-full rounded-2xl px-4 py-3 font-semibold shadow-glow",
                   outOfStock
                     ? "bg-white/5 text-white/40 border border-white/10 cursor-not-allowed"
-                    : "bg-gradient-to-r from-diamond-400 to-diamond-600"
-                )}
+                    : "bg-gradient-to-r from-diamond-400 to-diamond-600",
+                ].join(" ")}
               >
                 {outOfStock ? "No disponible" : "Agregar al carrito"}
               </button>
@@ -327,7 +342,6 @@ export function ComponentPage() {
             </p>
           </div>
 
-          {/* Specs (Características) */}
           <div className="mt-5 rounded-3xl border border-white/10 bg-white/5 p-4">
             <h3 className="text-base font-semibold">Características</h3>
 
@@ -347,13 +361,12 @@ export function ComponentPage() {
         </div>
       </div>
 
-      {/* Sección inferior: descripción / extras (opcional) */}
       <div className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-6 text-white/80">
         <h3 className="text-lg font-semibold">Descripción</h3>
         <p className="mt-2 text-sm text-white/70">
           {item.description
             ? String(item.description)
-            : "Agrega una descripción desde tu dashboard para mostrar detalles del producto (ideal para vista tipo tienda)."}
+            : "Agrega una descripción desde tu dashboard para mostrar detalles del producto."}
         </p>
       </div>
     </Layout>

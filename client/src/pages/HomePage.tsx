@@ -36,7 +36,7 @@ export function HomePage() {
       tag: "OFERTAS",
       cta: "Comprar",
       href: "/?q=RTX",
-      image: "/public/series5000.png", // ← cambia
+      image: "public/series5000.png", // ← cambia
     },
     {
       title: "AMD RYZEN",
@@ -73,16 +73,16 @@ export function HomePage() {
       tag: "STOCK LIMITADO",
       cta: "Comprar",
       href: "/?type=CASE",
-      image: "/banners/banner-cases.png", // ← cambia
+      image: "/public/cases.png", // ← cambia
     },
     bottom: {
-      title: "LAPTOPS",
+      title: "PROCESADORES",
       subtitle: "desde",
-      price: "$399.99",
+      price: "$199.99",
       tag: "CONOCE",
       cta: "Comprar",
       href: "/?q=Laptop",
-      image: "/banners/banner-laptops.png", // ← cambia
+      image: "/public/PROCESADORES.png", // ← cambia
     },
   } as const;
 
@@ -94,7 +94,7 @@ export function HomePage() {
     text2: "Manejamos los mejores precios del mercado.",
     cta: "Contáctanos",
     ctaHref: "/contact", // si no tienes ruta, déjalo o cámbialo por "/"
-    image: "/banners/about-store.png", // ← cambia
+    image: "/public/Diamond.png", // ← cambia
     stats: [
       { big: "2+", label: "Tiendas", desc: "Tiendas físicas en los mejores lugares de la ciudad" },
       { big: "115+", label: "Marcas", desc: "Solo los mejores" },

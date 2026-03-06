@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../app/auth";
 import { useCart } from "../app/cart";
 import { API_BASE } from "../lib/api";
+import { CategoriesMenu } from "./CategoriesMenu";
 
 export function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
@@ -13,23 +14,22 @@ export function Layout({ children }: { children: ReactNode }) {
   const isStaff = user?.role === "admin" || user?.role === "worker";
   const canShowCart = useMemo(() => !isStaff, [isStaff]);
 
-  // 🔎 search UI (solo frontend). Navega a "/?q=..."
   const [q, setQ] = useState("");
+  const [openCategories, setOpenCategories] = useState(false);
+
   function doSearch() {
     const term = q.trim();
     if (!term) return;
     nav(`/?q=${encodeURIComponent(term)}`);
   }
 
-  // ✅ Si el usuario es staff, ocultamos y limpiamos el carrito
   useEffect(() => {
     if (!isStaff) return;
     cart.setOpen(false);
     cart.clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isStaff]); // (no pongas cart aquí para evitar renders raros)
+  }, [isStaff]);
 
-  // ✅ FIX: si ya estás logueado y estás en /login o /register, redirige por rol
   useEffect(() => {
     if (!user) return;
 
@@ -42,9 +42,13 @@ export function Layout({ children }: { children: ReactNode }) {
     else nav("/", { replace: true });
   }, [user, location.pathname, nav]);
 
+  useEffect(() => {
+    setOpenCategories(false);
+  }, [location.pathname]);
+
   return (
     <div className="min-h-screen bg-ink-950 text-white">
-      {/* fondo “digital” */}
+      {/* fondo */}
       <div className="pointer-events-none fixed inset-0 opacity-70">
         <div className="absolute inset-0 bg-gradient-to-b from-ink-900 via-ink-950 to-ink-950" />
         <div className="absolute -top-40 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-diamond-500/15 blur-3xl" />
@@ -52,16 +56,14 @@ export function Layout({ children }: { children: ReactNode }) {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(34,211,238,0.10)_1px,transparent_0)] [background-size:22px_22px]" />
       </div>
 
-      {/* HEADER PRO */}
       <header className="relative z-10 border-b border-white/10">
         {/* TOPBAR */}
         <div className="border-b border-white/10 bg-black/20">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-2 text-xs text-white/70">
             <div className="flex items-center gap-4">
-              {/* No rompo rutas: si no existen, no navego. (Puedes activarlas luego) */}
-              <span className="cursor-default hover:text-white">Preguntas Frecuentes</span>
-              <span className="cursor-default hover:text-white">Contacto</span>
-              <span className="cursor-default hover:text-white">Trackeo de Pedidos</span>
+              <Link to="/about" className="hover:text-white">Preguntas Frecuentes</Link>
+              <Link to="/contact" className="hover:text-white">Contacto</Link>
+              <Link to="/profile" className="hover:text-white">Trackeo de Pedidos</Link>
             </div>
 
             <div className="flex items-center gap-2">
@@ -74,7 +76,6 @@ export function Layout({ children }: { children: ReactNode }) {
         {/* HEADER PRINCIPAL */}
         <div className="bg-ink-950/40 backdrop-blur-xl">
           <div className="mx-auto grid max-w-6xl grid-cols-1 gap-3 px-6 py-4 md:grid-cols-[auto_1fr_auto] md:items-center">
-            {/* Logo */}
             <Link to="/" className="flex items-center gap-3">
               <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-diamond-300 to-diamond-600 shadow-glow" />
               <div>
@@ -108,9 +109,8 @@ export function Layout({ children }: { children: ReactNode }) {
               </p>
             </div>
 
-            {/* Acciones derecha */}
+            {/* Derecha */}
             <div className="flex items-center justify-between gap-2 md:justify-end">
-              {/* 🛒 Carrito (solo si NO es staff) */}
               {canShowCart && (
                 <button
                   onClick={() => cart.setOpen(true)}
@@ -143,7 +143,6 @@ export function Layout({ children }: { children: ReactNode }) {
                 </>
               ) : (
                 <>
-                  {/* Perfil (avatar + nickname) */}
                   <Link
                     to="/profile"
                     className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
@@ -156,7 +155,7 @@ export function Layout({ children }: { children: ReactNode }) {
                         className="h-7 w-7 rounded-full object-cover border border-white/20"
                       />
                     ) : (
-                      <div className="h-7 w-7 rounded-full border border-white/20 bg-white/10 grid place-items-center text-xs font-bold">
+                      <div className="grid h-7 w-7 place-items-center rounded-full border border-white/20 bg-white/10 text-xs font-bold">
                         {(String((user as any).nickname || user.name || "U")[0] || "U").toUpperCase()}
                       </div>
                     )}
@@ -169,7 +168,6 @@ export function Layout({ children }: { children: ReactNode }) {
                     <span className="hidden md:inline text-xs text-white/60">{user.role}</span>
                   </Link>
 
-                  {/* Staff buttons */}
                   {user.role === "admin" && (
                     <button
                       onClick={() => nav("/admin")}
@@ -208,25 +206,28 @@ export function Layout({ children }: { children: ReactNode }) {
         {/* NAVBAR */}
         <div className="border-t border-white/10 bg-black/15">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
-            <button
-              className="flex items-center gap-2 rounded-xl bg-diamond-600/20 px-4 py-2 text-sm font-semibold text-white hover:bg-diamond-600/30"
-              title="Categorías (próximamente)"
-            >
-              ☰ Categorías
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setOpenCategories((v) => !v)}
+                className="flex items-center gap-2 rounded-xl bg-diamond-600/20 px-4 py-2 text-sm font-semibold text-white hover:bg-diamond-600/30"
+                title="Categorías"
+              >
+                ☰ Categorías
+              </button>
 
-            {/* Links (si no tienes rutas, déjalos como texto por ahora) */}
+              <CategoriesMenu
+                open={openCategories}
+                onClose={() => setOpenCategories(false)}
+              />
+            </div>
+
             <nav className="hidden md:flex items-center gap-6 text-sm text-white/80">
               <Link to="/" className="hover:text-white">Tienda</Link>
-              <span className="cursor-default hover:text-white">Noticias</span>
-              <span className="cursor-default hover:text-white">Nosotros</span>
-              <span className="cursor-default hover:text-white">Contacto</span>
-              <span className="cursor-default text-diamond-200 hover:text-white">🔥 Ofertas</span>
+              <Link to="/news" className="hover:text-white">Noticias</Link>
+              <Link to="/about" className="hover:text-white">Nosotros</Link>
+              <Link to="/contact" className="hover:text-white">Contacto</Link>
+              <Link to="/offers" className="text-diamond-200 hover:text-white">🔥 Ofertas</Link>
             </nav>
-
-            <div className="hidden md:block text-xs text-white/60">
-              {user ? `Rol: ${user.role}` : "Invitado"}
-            </div>
           </div>
         </div>
       </header>
@@ -241,7 +242,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       </footer>
 
-      {/* Drawer carrito (solo si NO es staff) */}
+      {/* Drawer carrito */}
       {canShowCart && cart.open && (
         <div className="fixed inset-0 z-[9999]">
           <div
@@ -286,7 +287,7 @@ export function Layout({ children }: { children: ReactNode }) {
                           {it.brand} {it.model}
                         </p>
                         <p className="text-xs text-white/60">{it.type}</p>
-                        <p className="mt-1 text-sm text-diamond-200 font-semibold">
+                        <p className="mt-1 text-sm font-semibold text-diamond-200">
                           ${Number(it.price).toFixed(2)}
                         </p>
 
