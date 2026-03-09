@@ -183,3 +183,81 @@ export async function uploadAvatar(file: File) {
   });
   return r.json();
 }
+// =====================
+// GOOGLE AUTH
+// =====================
+export async function getGoogleClientId(): Promise<string> {
+  const r = await fetch(`${API}/auth/google/client-id`);
+  const data = await r.json();
+  return data?.clientId || "";
+}
+
+export async function authGoogle(credential: string) {
+  const r = await fetch(`${API}/auth/google`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ credential }),
+  });
+  return r.json();
+}
+export async function createOrder(payload: {
+  method: "BANK_TRANSFER" | "DEPOSIT";
+  bank: string;
+  reference?: string;
+  holderName?: string;
+  notes?: string;
+  items: Array<{ id: string; qty: number }>;
+}) {
+  const r = await fetch(`${API}/orders`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+    },
+    body: JSON.stringify(payload),
+  });
+  return r.json();
+}
+
+export async function uploadOrderReceipt(orderId: string, file: File) {
+  const fd = new FormData();
+  fd.append("receipt", file);
+
+  const r = await fetch(`${API}/orders/${orderId}/receipt`, {
+    method: "POST",
+    headers: {
+      ...authHeaders(),
+    },
+    body: fd,
+  });
+  return r.json();
+}
+
+export async function fetchMyOrders() {
+  const r = await fetch(`${API}/orders/me`, {
+    headers: { ...authHeaders() },
+  });
+  return r.json();
+}
+
+export async function fetchAdminOrders() {
+  const r = await fetch(`${API}/admin/orders`, {
+    headers: { ...authHeaders() },
+  });
+  return r.json();
+}
+
+export async function updateAdminOrderStatus(
+  id: string,
+  status: "PENDING_PAYMENT" | "PAID" | "REJECTED" | "CANCELLED"
+) {
+  const r = await fetch(`${API}/admin/orders/${id}/status`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+    },
+    body: JSON.stringify({ status }),
+  });
+  return r.json();
+}

@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, OrderStatus, PaymentMethod } from "@prisma/client";
 import { z } from "zod";
 import { login, register, requireAuth, requireRole, googleLogin } from "./auth";
 import path from "path";
@@ -16,7 +16,7 @@ app.use(express.json());
 // ✅ Servir carpeta uploads
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
-// ✅ Multer config (guardar archivos en /uploads)
+// ✅ Multer config
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, "uploads"),
   filename: (_req, file, cb) => {
@@ -27,10 +27,9 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 3 * 1024 * 1024 }, // 3MB
+  limits: { fileSize: 5 * 1024 * 1024 },
 });
 
-// helper: borrar archivo anterior si existe
 function removeUploadByUrl(imageUrl?: string | null) {
   if (!imageUrl) return;
   const rel = imageUrl.startsWith("/uploads/") ? imageUrl.slice("/uploads/".length) : null;
@@ -43,23 +42,32 @@ function removeUploadByUrl(imageUrl?: string | null) {
   }
 }
 
+function makeOrderNumber(id: string) {
+  const short = id.slice(-6).toUpperCase();
+  const year = new Date().getFullYear();
+  return `DG-${year}-${short}`;
+}
+
 // ✅ Auth
 app.post("/api/auth/register", register);
 app.post("/api/auth/login", login);
 
-// ✅ GOOGLE AUTH (POST)
+app.get("/api/auth/google/client-id", (_req, res) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID || "";
+  res.json({ ok: true, clientId });
+});
+
 app.post("/api/auth/google", googleLogin);
 
 app.get("/api/auth/google", (_req, res) => {
   res.status(405).json({ ok: false, message: "Usa POST /api/auth/google con JSON: { credential }" });
 });
 
-// ✅ Health
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
-// -----------------------------
-// ✅ PERFIL (ME)
-// -----------------------------
+// =============================
+// PERFIL
+// =============================
 app.get("/api/me", requireAuth, async (req, res) => {
   const userId = (req as any).user?.id as string;
 
@@ -152,11 +160,9 @@ app.post("/api/me/avatar", requireAuth, upload.single("avatar"), async (req, res
   res.json({ ok: true, user: updated });
 });
 
-// -----------------------------
-// ✅ COMPONENTES
-// -----------------------------
-
-// ✅ List components (por defecto solo activos)
+// =============================
+// COMPONENTES
+// =============================
 app.get("/api/components", async (req, res) => {
   const type = typeof req.query.type === "string" ? req.query.type : undefined;
   const status = typeof req.query.status === "string" ? req.query.status : "active";
@@ -172,14 +178,13 @@ app.get("/api/components", async (req, res) => {
   res.json(items);
 });
 
-// ✅ Get component by id (INCLUYE GALERÍA)
 app.get("/api/components/:id", async (req, res) => {
   const { id } = req.params;
 
   const item = await prisma.component.findUnique({
     where: { id },
     include: {
-      images: { orderBy: { createdAt: "asc" } }, // ✅ galería
+      images: { orderBy: { createdAt: "asc" } },
     },
   });
 
@@ -187,7 +192,6 @@ app.get("/api/components/:id", async (req, res) => {
   res.json(item);
 });
 
-// ✅ (Opcional útil) listar SOLO imágenes
 app.get("/api/components/:id/images", async (req, res) => {
   const { id } = req.params;
   const images = await prisma.componentImage.findMany({
@@ -197,7 +201,6 @@ app.get("/api/components/:id/images", async (req, res) => {
   res.json(images);
 });
 
-// ✅ Subir varias imágenes a la galería (admin/worker)
 app.post(
   "/api/components/:id/images",
   requireAuth,
@@ -225,7 +228,6 @@ app.post(
   }
 );
 
-// ✅ Borrar una imagen de galería (admin/worker)
 app.delete(
   "/api/components/:id/images/:imageId",
   requireAuth,
@@ -239,9 +241,7 @@ app.delete(
 
     if (!img) return res.status(404).json({ ok: false, message: "Imagen no encontrada" });
 
-    // borrar archivo físico
     removeUploadByUrl(img.url);
-
     await prisma.componentImage.delete({ where: { id: imageId } });
 
     const images = await prisma.componentImage.findMany({
@@ -253,7 +253,6 @@ app.delete(
   }
 );
 
-// ✅ Create component con imagen (admin/worker)
 app.post(
   "/api/components",
   requireAuth,
@@ -282,7 +281,6 @@ app.post(
   }
 );
 
-// ✅ Update component con imagen (admin/worker)
 app.put(
   "/api/components/:id",
   requireAuth,
@@ -322,7 +320,6 @@ app.put(
   }
 );
 
-// ✅ Delete component (admin/worker) + borra imagen principal + galería
 app.delete(
   "/api/components/:id",
   requireAuth,
@@ -336,15 +333,10 @@ app.delete(
       });
       if (!current) return res.status(404).json({ ok: false, message: "Componente no encontrado" });
 
-      // borra imagen principal
       removeUploadByUrl(current.imageUrl);
-
-      // borra archivos de galería
       for (const img of current.images) removeUploadByUrl(img.url);
 
-      // borra el componente (Cascade elimina ComponentImage en DB)
       await prisma.component.delete({ where: { id } });
-
       res.json({ ok: true });
     } catch {
       res.status(404).json({ ok: false, message: "Componente no encontrado" });
@@ -352,7 +344,6 @@ app.delete(
   }
 );
 
-// ✅ PATCH stock (admin/worker)
 const StockSchema = z.object({
   delta: z.number().int(),
 });
@@ -389,7 +380,6 @@ app.patch(
   }
 );
 
-// ✅ PATCH status (admin/worker)
 const StatusSchema = z.object({
   status: z.enum(["active", "inactive"]),
 });
@@ -415,11 +405,10 @@ app.patch(
   }
 );
 
-// ✅ Export CSV (admin/worker)
-app.get("/api/admin/components/export", requireAuth, requireRole(["admin","worker"]), async (_req, res) => {
+app.get("/api/admin/components/export", requireAuth, requireRole(["admin", "worker"]), async (_req, res) => {
   const items = await prisma.component.findMany({ orderBy: { type: "asc" } });
 
-  const header = ["id","type","brand","model","price","stock","status","imageUrl"].join(",");
+  const header = ["id", "type", "brand", "model", "price", "stock", "status", "imageUrl"].join(",");
   const rows = items.map((c) =>
     [c.id, c.type, c.brand, c.model, c.price, c.stock, c.status, c.imageUrl ?? ""]
       .map((x) => `"${String(x).replaceAll('"', '""')}"`)
@@ -432,13 +421,245 @@ app.get("/api/admin/components/export", requireAuth, requireRole(["admin","worke
   res.send(csv);
 });
 
-// ✅ Reset components (solo admin)
 app.delete("/api/admin/components/reset", requireAuth, requireRole(["admin"]), async (_req, res) => {
   await prisma.component.deleteMany();
   res.json({ ok: true });
 });
 
-// ✅ Seed (igual que antes)
+// =============================
+// ÓRDENES / PAGOS
+// =============================
+const CreateOrderSchema = z.object({
+  method: z.enum(["BANK_TRANSFER", "DEPOSIT"]).default("BANK_TRANSFER"),
+  bank: z.string().min(2),
+  reference: z.string().optional(),
+  holderName: z.string().optional(),
+  notes: z.string().optional(),
+  items: z.array(
+    z.object({
+      id: z.string(),
+      qty: z.number().int().min(1),
+    })
+  ).min(1),
+});
+
+app.post("/api/orders", requireAuth, async (req, res) => {
+  const userId = (req as any).user?.id as string;
+
+  const parsed = CreateOrderSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, errors: parsed.error.flatten() });
+  }
+
+  const { method, bank, reference, holderName, notes, items } = parsed.data;
+
+  const ids = items.map((x) => x.id);
+  const components = await prisma.component.findMany({
+    where: {
+      id: { in: ids },
+      status: "active",
+    },
+  });
+
+  if (components.length !== ids.length) {
+    return res.status(400).json({ ok: false, message: "Uno o más componentes no están disponibles." });
+  }
+
+  const map = new Map(components.map((c) => [c.id, c]));
+  for (const row of items) {
+    const comp = map.get(row.id);
+    if (!comp) continue;
+    if (comp.stock < row.qty) {
+      return res.status(400).json({
+        ok: false,
+        message: `Stock insuficiente para ${comp.brand} ${comp.model}. Disponible: ${comp.stock}`,
+      });
+    }
+  }
+
+  const subtotal = items.reduce((acc, row) => {
+    const comp = map.get(row.id)!;
+    return acc + Number(comp.price) * row.qty;
+  }, 0);
+
+  const shipping = 0;
+  const total = subtotal + shipping;
+
+  try {
+    const created = await prisma.$transaction(async (tx) => {
+      const order = await tx.order.create({
+        data: {
+          userId,
+          subtotal,
+          shipping,
+          total,
+          notes: notes || null,
+          items: {
+            create: items.map((row) => {
+              const comp = map.get(row.id)!;
+              return {
+                componentId: comp.id,
+                type: comp.type,
+                brand: comp.brand,
+                model: comp.model,
+                price: comp.price,
+                qty: row.qty,
+                imageUrl: comp.imageUrl ?? null,
+              };
+            }),
+          },
+          payment: {
+            create: {
+              method: method as PaymentMethod,
+              bank,
+              reference: reference || null,
+              holderName: holderName || null,
+            },
+          },
+        },
+        include: {
+          items: true,
+          payment: true,
+        },
+      });
+
+      await Promise.all(
+        items.map((row) =>
+          tx.component.update({
+            where: { id: row.id },
+            data: {
+              stock: { decrement: row.qty },
+            },
+          })
+        )
+      );
+
+      return order;
+    });
+
+    return res.json({
+      ok: true,
+      order: {
+        ...created,
+        orderNumber: makeOrderNumber(created.id),
+      },
+    });
+  } catch {
+    return res.status(500).json({ ok: false, message: "No se pudo crear la orden." });
+  }
+});
+
+app.post(
+  "/api/orders/:id/receipt",
+  requireAuth,
+  upload.single("receipt"),
+  async (req, res) => {
+    const userId = (req as any).user?.id as string;
+    const { id } = req.params;
+
+    if (!req.file) {
+      return res.status(400).json({ ok: false, message: "Falta el comprobante." });
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: { payment: true },
+    });
+
+    if (!order || order.userId !== userId) {
+      return res.status(404).json({ ok: false, message: "Orden no encontrada." });
+    }
+
+    const receiptUrl = `/uploads/${req.file.filename}`;
+
+    if (order.payment?.receiptUrl) {
+      removeUploadByUrl(order.payment.receiptUrl);
+    }
+
+    const payment = await prisma.payment.update({
+      where: { orderId: id },
+      data: {
+        receiptUrl,
+      },
+    });
+
+    res.json({ ok: true, payment });
+  }
+);
+
+app.get("/api/orders/me", requireAuth, async (req, res) => {
+  const userId = (req as any).user?.id as string;
+
+  const orders = await prisma.order.findMany({
+    where: { userId },
+    include: {
+      items: true,
+      payment: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const mapped = orders.map((o) => ({
+    ...o,
+    orderNumber: makeOrderNumber(o.id),
+  }));
+
+  res.json({ ok: true, orders: mapped });
+});
+
+app.get("/api/admin/orders", requireAuth, requireRole(["admin", "worker"]), async (_req, res) => {
+  const orders = await prisma.order.findMany({
+    include: {
+      user: {
+        select: { id: true, name: true, email: true, role: true },
+      },
+      items: true,
+      payment: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const mapped = orders.map((o) => ({
+    ...o,
+    orderNumber: makeOrderNumber(o.id),
+  }));
+
+  res.json({ ok: true, orders: mapped });
+});
+
+const UpdateOrderStatusSchema = z.object({
+  status: z.nativeEnum(OrderStatus),
+});
+
+app.patch("/api/admin/orders/:id/status", requireAuth, requireRole(["admin", "worker"]), async (req, res) => {
+  const { id } = req.params;
+  const parsed = UpdateOrderStatusSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, message: "Estado inválido." });
+  }
+
+  const updated = await prisma.order.update({
+    where: { id },
+    data: { status: parsed.data.status },
+    include: {
+      items: true,
+      payment: true,
+    },
+  });
+
+  res.json({
+    ok: true,
+    order: {
+      ...updated,
+      orderNumber: makeOrderNumber(updated.id),
+    },
+  });
+});
+
+// =============================
+// SEED
+// =============================
 app.post("/api/seed", async (_req, res) => {
   const count = await prisma.component.count();
   if (count > 0) return res.json({ ok: true, message: "Already seeded" });
@@ -458,7 +679,9 @@ app.post("/api/seed", async (_req, res) => {
   res.json({ ok: true, message: "Seeded" });
 });
 
-// ✅ Recommend (igual que antes)
+// =============================
+// RECOMMEND
+// =============================
 const RecommendSchema = z.object({
   budget: z.number().min(100),
   purpose: z.enum(["gaming", "office", "design", "programming"]),

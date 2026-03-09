@@ -9,10 +9,13 @@ import {
   updateComponentStock,
   updateComponentStatus,
   API_BASE,
+  fetchAdminOrders,
+  updateAdminOrderStatus,
 } from "../../lib/api";
 
 const TYPES = ["CPU", "GPU", "RAM", "SSD", "PSU", "MOBO", "CASE"] as const;
 type Status = "active" | "inactive";
+type OrderStatus = "PENDING_PAYMENT" | "PAID" | "REJECTED" | "CANCELLED";
 
 type FormState = {
   id?: string;
@@ -23,16 +26,11 @@ type FormState = {
   scoreGaming: number;
   scoreWork: number;
   watt?: number | null;
-
   stock: number;
   status: Status;
-
   metaText: string;
-
   imageFile?: File | null;
   imagePreview?: string | null;
-
-  // ⭐ galería (Opción B)
   galleryFiles?: File[];
 };
 
@@ -75,11 +73,31 @@ async function uploadComponentGallery(componentId: string, files: File[]) {
   }
 }
 
+function money(n: number) {
+  return `$${Number(n || 0).toFixed(2)}`;
+}
+
+function orderBadge(status: OrderStatus) {
+  switch (status) {
+    case "PAID":
+      return "border-emerald-400/20 bg-emerald-500/10 text-emerald-200";
+    case "REJECTED":
+      return "border-red-400/20 bg-red-500/10 text-red-200";
+    case "CANCELLED":
+      return "border-orange-400/20 bg-orange-500/10 text-orange-200";
+    default:
+      return "border-yellow-400/20 bg-yellow-500/10 text-yellow-200";
+  }
+}
+
 export function WorkerDashboard() {
   const [items, setItems] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [ordersLoading, setOrdersLoading] = useState(false);
   const [q, setQ] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
+  const [orderFilter, setOrderFilter] = useState<"ALL" | OrderStatus>("ALL");
 
   const [form, setForm] = useState<FormState>(emptyForm);
   const [mode, setMode] = useState<"create" | "edit">("create");
@@ -92,16 +110,35 @@ export function WorkerDashboard() {
     setLoading(false);
   }
 
+  async function loadOrders() {
+    setOrdersLoading(true);
+    try {
+      const data = await fetchAdminOrders();
+      setOrders(Array.isArray(data?.orders) ? data.orders : []);
+    } finally {
+      setOrdersLoading(false);
+    }
+  }
+
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [typeFilter]);
+
+  useEffect(() => {
+    loadOrders();
+  }, []);
 
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();
     if (!t) return items;
     return items.filter((x) => `${x.type} ${x.brand} ${x.model}`.toLowerCase().includes(t));
   }, [items, q]);
+
+  const filteredOrders = useMemo(() => {
+    const base = orderFilter === "ALL" ? orders : orders.filter((o) => o.status === orderFilter);
+    return base;
+  }, [orders, orderFilter]);
 
   function onEdit(c: any) {
     setMode("edit");
@@ -174,13 +211,10 @@ export function WorkerDashboard() {
         setMsg("✅ Componente actualizado");
       }
 
-      // ⭐ subir galería
       if (savedId && form.galleryFiles && form.galleryFiles.length > 0) {
         const gr = await uploadComponentGallery(savedId, form.galleryFiles);
         if (gr?.ok === false) {
-          setMsg((m) =>
-            `${m ?? "✅ Guardado."}\n⚠️ Galería no subida: ${gr.message || "revisa ruta /api/components/:id/images"}`
-          );
+          setMsg((m) => `${m ?? "✅ Guardado."}\n⚠️ Galería no subida: ${gr.message || "revisa ruta /api/components/:id/images"}`);
         } else {
           setMsg((m) => `${m ?? "✅ Guardado."}\n🖼️ Galería subida (${form.galleryFiles.length})`);
         }
@@ -210,17 +244,24 @@ export function WorkerDashboard() {
     try {
       await updateComponentStock(id, delta);
       await load();
-    } catch {
-      // ignore
-    }
+    } catch {}
   }
 
   async function toggleStatus(id: string, next: Status) {
     try {
       await updateComponentStatus(id, next);
       await load();
-    } catch {
-      // ignore
+    } catch {}
+  }
+
+  async function changeOrderStatus(orderId: string, status: OrderStatus) {
+    try {
+      const res = await updateAdminOrderStatus(orderId, status);
+      if (res?.ok === false) throw new Error(res.message || "No se pudo actualizar");
+      await loadOrders();
+      alert(`✅ Pedido actualizado a ${status}`);
+    } catch (e: any) {
+      alert(`❌ ${e.message || "Error al actualizar pedido"}`);
     }
   }
 
@@ -231,7 +272,7 @@ export function WorkerDashboard() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-semibold">Worker • Dashboard</h2>
-              <p className="text-sm text-white/60">Gestiona componentes y stock (sin herramientas admin).</p>
+              <p className="text-sm text-white/60">Gestiona componentes, stock y verificación de pedidos.</p>
             </div>
 
             <div className="flex gap-2">
@@ -395,7 +436,6 @@ export function WorkerDashboard() {
                 )}
               </div>
 
-              {/* ⭐ GALERÍA */}
               <div>
                 <label className="text-xs text-white/60">Galería (varias imágenes)</label>
                 <input
@@ -408,9 +448,6 @@ export function WorkerDashboard() {
                     setForm((s) => ({ ...s, galleryFiles: files }));
                   }}
                 />
-                <p className="mt-1 text-xs text-white/50">
-                  POST /api/components/:id/images (si no existe aún, te avisará).
-                </p>
               </div>
 
               <div className="mt-2 grid grid-cols-2 gap-2">
@@ -544,6 +581,143 @@ export function WorkerDashboard() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+
+        {/* PEDIDOS */}
+        <div className="rounded-3xl border border-white/10 bg-ink-900/60 p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold">Pedidos y pagos</h3>
+              <p className="text-sm text-white/60">Verifica pagos y actualiza el estado de los pedidos.</p>
+            </div>
+
+            <div className="flex gap-2">
+              <select
+                value={orderFilter}
+                onChange={(e) => setOrderFilter(e.target.value as any)}
+                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none"
+              >
+                <option value="ALL">Todos</option>
+                <option value="PENDING_PAYMENT">Pendientes</option>
+                <option value="PAID">Pagados</option>
+                <option value="REJECTED">Rechazados</option>
+                <option value="CANCELLED">Cancelados</option>
+              </select>
+
+              <button
+                onClick={loadOrders}
+                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+              >
+                {ordersLoading ? "Cargando..." : "Refrescar pedidos"}
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-4">
+            {filteredOrders.length === 0 ? (
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+                No hay pedidos para mostrar.
+              </div>
+            ) : (
+              filteredOrders.map((order) => (
+                <div key={order.id} className="rounded-3xl border border-white/10 bg-white/5 p-5">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <p className="text-sm text-white/50">Pedido</p>
+                      <p className="text-lg font-semibold text-diamond-200">
+                        {order.orderNumber || order.id}
+                      </p>
+                      <p className="mt-1 text-sm text-white/60">
+                        Cliente: {order.user?.name || "—"} • {order.user?.email || "—"}
+                      </p>
+                      <p className="mt-1 text-sm text-white/60">
+                        Fecha: {new Date(order.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col items-start gap-2 lg:items-end">
+                      <span className={`rounded-full border px-3 py-1 text-sm font-semibold ${orderBadge(order.status)}`}>
+                        {order.status}
+                      </span>
+                      <p className="text-xl font-bold text-diamond-200">{money(order.total)}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-2 md:grid-cols-2">
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <p className="text-xs text-white/60">Banco</p>
+                      <p className="font-semibold">{order.payment?.bank || "—"}</p>
+                      <p className="mt-2 text-xs text-white/60">Método</p>
+                      <p className="font-semibold">{order.payment?.method || "—"}</p>
+                      <p className="mt-2 text-xs text-white/60">Referencia</p>
+                      <p className="font-semibold">{order.payment?.reference || "—"}</p>
+                      <p className="mt-2 text-xs text-white/60">Titular</p>
+                      <p className="font-semibold">{order.payment?.holderName || "—"}</p>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <p className="text-xs text-white/60">Notas</p>
+                      <p className="text-sm text-white/80">{order.notes || "Sin notas."}</p>
+
+                      {order.payment?.receiptUrl ? (
+                        <a
+                          href={`${API_BASE}${order.payment.receiptUrl}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-4 inline-flex rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80 hover:bg-white/10"
+                        >
+                          Ver comprobante
+                        </a>
+                      ) : (
+                        <p className="mt-4 text-sm text-white/50">Sin comprobante adjunto.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-2">
+                    {order.items?.map((it: any) => (
+                      <div
+                        key={it.id}
+                        className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-3 py-2"
+                      >
+                        <div>
+                          <p className="font-semibold">{it.brand} {it.model}</p>
+                          <p className="text-xs text-white/60">{it.type}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-white/70">{it.qty} × {money(it.price)}</p>
+                          <p className="font-semibold text-diamond-200">{money(it.qty * it.price)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => changeOrderStatus(order.id, "PAID")}
+                      className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/20"
+                    >
+                      Aprobar pago
+                    </button>
+
+                    <button
+                      onClick={() => changeOrderStatus(order.id, "REJECTED")}
+                      className="rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 hover:bg-red-500/20"
+                    >
+                      Rechazar pago
+                    </button>
+
+                    <button
+                      onClick={() => changeOrderStatus(order.id, "CANCELLED")}
+                      className="rounded-xl border border-orange-400/20 bg-orange-500/10 px-4 py-2 text-sm font-semibold text-orange-200 hover:bg-orange-500/20"
+                    >
+                      Cancelar pedido
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
