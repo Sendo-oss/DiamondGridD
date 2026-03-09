@@ -3,7 +3,6 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../app/auth";
 import { useCart } from "../app/cart";
 import { API_BASE } from "../lib/api";
-import { CategoriesMenu } from "./CategoriesMenu";
 
 export function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
@@ -15,7 +14,6 @@ export function Layout({ children }: { children: ReactNode }) {
   const canShowCart = useMemo(() => !isStaff, [isStaff]);
 
   const [q, setQ] = useState("");
-  const [openCategories, setOpenCategories] = useState(false);
 
   function doSearch() {
     const term = q.trim();
@@ -42,19 +40,73 @@ export function Layout({ children }: { children: ReactNode }) {
     else nav("/", { replace: true });
   }, [user, location.pathname, nav]);
 
-  useEffect(() => {
-    setOpenCategories(false);
-  }, [location.pathname]);
-
   return (
-    <div className="min-h-screen bg-ink-950 text-white">
-      {/* fondo */}
-      <div className="pointer-events-none fixed inset-0 opacity-70">
-        <div className="absolute inset-0 bg-gradient-to-b from-ink-900 via-ink-950 to-ink-950" />
-        <div className="absolute -top-40 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-diamond-500/15 blur-3xl" />
-        <div className="absolute bottom-[-180px] right-[-120px] h-[520px] w-[520px] rounded-full bg-diamond-300/10 blur-3xl" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(34,211,238,0.10)_1px,transparent_0)] [background-size:22px_22px]" />
+    <div className="min-h-screen overflow-x-hidden bg-ink-950 text-white">
+      {/* ===== FONDO MÁS LLAMATIVO ===== */}
+      <div className="pointer-events-none fixed inset-0 opacity-100">
+        {/* base oscura */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#071827_0%,#050b14_42%,#03070f_100%)]" />
+
+        {/* glow hero principal */}
+        <div className="absolute left-1/2 top-[3%] h-[680px] w-[680px] -translate-x-1/2 rounded-full bg-cyan-400/14 blur-3xl animate-[heroPulse_10s_ease-in-out_infinite]" />
+
+        {/* glow lateral derecho */}
+        <div className="absolute right-[-140px] top-[18%] h-[500px] w-[500px] rounded-full bg-blue-500/12 blur-3xl animate-[floatRight_13s_ease-in-out_infinite]" />
+
+        {/* glow inferior izquierdo */}
+        <div className="absolute bottom-[4%] left-[-120px] h-[460px] w-[460px] rounded-full bg-diamond-400/10 blur-3xl animate-[floatLeft_15s_ease-in-out_infinite]" />
+
+        {/* glow secundario central */}
+        <div className="absolute left-[45%] top-[48%] h-[340px] w-[340px] rounded-full bg-sky-300/8 blur-3xl animate-[softPulse_8s_ease-in-out_infinite]" />
+
+        {/* grid */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(34,211,238,0.09)_1px,transparent_0)] [background-size:22px_22px]" />
+
+        {/* líneas brillantes diagonales */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute -left-1/3 top-0 h-full w-1/3 rotate-[18deg] bg-gradient-to-r from-transparent via-cyan-300/10 to-transparent blur-2xl animate-[shimmerSweep_10s_linear_infinite]" />
+          <div className="absolute -right-1/3 top-0 h-full w-1/4 -rotate-[18deg] bg-gradient-to-r from-transparent via-diamond-300/10 to-transparent blur-2xl animate-[shimmerSweepReverse_14s_linear_infinite]" />
+        </div>
+
+        {/* viñeta */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.18)_58%,rgba(0,0,0,0.42)_100%)]" />
       </div>
+
+      <style>{`
+        @keyframes heroPulse {
+          0%, 100% { transform: translateX(-50%) translateY(0px) scale(1); opacity: 0.85; }
+          50% { transform: translateX(-50%) translateY(20px) scale(1.08); opacity: 1; }
+        }
+
+        @keyframes floatRight {
+          0%, 100% { transform: translate(0px, 0px) scale(1); opacity: 0.75; }
+          50% { transform: translate(-24px, -16px) scale(1.08); opacity: 1; }
+        }
+
+        @keyframes floatLeft {
+          0%, 100% { transform: translate(0px, 0px) scale(1); opacity: 0.68; }
+          50% { transform: translate(18px, -24px) scale(1.12); opacity: 0.95; }
+        }
+
+        @keyframes softPulse {
+          0%, 100% { transform: scale(1); opacity: 0.45; }
+          50% { transform: scale(1.14); opacity: 0.8; }
+        }
+
+        @keyframes shimmerSweep {
+          0% { transform: translateX(-15%); opacity: 0; }
+          8% { opacity: 1; }
+          45% { opacity: 0.7; }
+          100% { transform: translateX(190%); opacity: 0; }
+        }
+
+        @keyframes shimmerSweepReverse {
+          0% { transform: translateX(15%); opacity: 0; }
+          10% { opacity: 1; }
+          45% { opacity: 0.65; }
+          100% { transform: translateX(-190%); opacity: 0; }
+        }
+      `}</style>
 
       <header className="relative z-10 border-b border-white/10">
         {/* TOPBAR */}
@@ -74,10 +126,10 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
 
         {/* HEADER PRINCIPAL */}
-        <div className="bg-ink-950/40 backdrop-blur-xl">
+        <div className="bg-ink-950/35 backdrop-blur-xl">
           <div className="mx-auto grid max-w-6xl grid-cols-1 gap-3 px-6 py-4 md:grid-cols-[auto_1fr_auto] md:items-center">
             <Link to="/" className="flex items-center gap-3">
-              <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-diamond-300 to-diamond-600 shadow-glow" />
+              <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-diamond-300 to-diamond-600 shadow-[0_0_40px_rgba(34,211,238,0.35)]" />
               <div>
                 <p className="text-xs text-white/60">Sistema de Componentes</p>
                 <h1 className="text-lg font-semibold tracking-wide">Diamond Grid</h1>
@@ -86,7 +138,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
             {/* Buscador */}
             <div className="md:px-6">
-              <div className="flex items-center overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+              <div className="flex items-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-[0_0_30px_rgba(34,211,238,0.06)]">
                 <input
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
@@ -135,7 +187,7 @@ export function Layout({ children }: { children: ReactNode }) {
                     Iniciar sesión
                   </Link>
                   <Link
-                    className="rounded-2xl bg-gradient-to-r from-diamond-400 to-diamond-600 px-3 py-2 text-sm font-semibold shadow-glow"
+                    className="rounded-2xl bg-gradient-to-r from-diamond-400 to-diamond-600 px-3 py-2 text-sm font-semibold shadow-[0_0_35px_rgba(34,211,238,0.28)]"
                     to="/register"
                   >
                     Registrarse
@@ -203,25 +255,10 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        {/* NAVBAR */}
+        {/* NAVBAR SIN BOTÓN CATEGORÍAS */}
         <div className="border-t border-white/10 bg-black/15">
-          <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
-            <div className="relative">
-              <button
-                onClick={() => setOpenCategories((v) => !v)}
-                className="flex items-center gap-2 rounded-xl bg-diamond-600/20 px-4 py-2 text-sm font-semibold text-white hover:bg-diamond-600/30"
-                title="Categorías"
-              >
-                ☰ Categorías
-              </button>
-
-              <CategoriesMenu
-                open={openCategories}
-                onClose={() => setOpenCategories(false)}
-              />
-            </div>
-
-            <nav className="hidden md:flex items-center gap-6 text-sm text-white/80">
+          <div className="mx-auto flex max-w-6xl items-center justify-center px-6 py-3">
+            <nav className="hidden md:flex items-center gap-8 text-sm text-white/80">
               <Link to="/" className="hover:text-white">Tienda</Link>
               <Link to="/news" className="hover:text-white">Noticias</Link>
               <Link to="/about" className="hover:text-white">Nosotros</Link>

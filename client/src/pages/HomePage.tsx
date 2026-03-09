@@ -20,15 +20,6 @@ export function HomePage() {
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
 
-  /**
-   * ✅ IMÁGENES (tú solo cambias rutas)
-   * Recomendación PRO:
-   * - pon tus banners en: client/public/banners/
-   * - pon tus logos en:   client/public/brands/
-   * y usas rutas: "/banners/..." y "/brands/..."
-   */
-
-  // ✅ Carrusel (banner grande)
   const SLIDES = [
     {
       title: "NVIDIA SERIES 5000",
@@ -36,7 +27,7 @@ export function HomePage() {
       tag: "OFERTAS",
       cta: "Comprar",
       href: "/?q=RTX",
-      image: "public/series5000.png", // ← cambia
+      image: "/series5000.png",
     },
     {
       title: "AMD RYZEN",
@@ -44,7 +35,7 @@ export function HomePage() {
       tag: "TOP",
       cta: "Ver CPUs",
       href: "/?type=CPU",
-      image: "/banners/slide-2.png", // ← cambia
+      image: "/banners/slide-2.png",
     },
     {
       title: "ALMACENAMIENTO",
@@ -52,19 +43,17 @@ export function HomePage() {
       tag: "PROMO",
       cta: "Ver SSD",
       href: "/?type=SSD",
-      image: "/banners/slide-3.png", // ← cambia
+      image: "/banners/slide-3.png",
     },
   ] as const;
 
   const [slide, setSlide] = useState(0);
 
-  // autoplay carrusel
   useEffect(() => {
     const id = setInterval(() => setSlide((s) => (s + 1) % SLIDES.length), 5500);
     return () => clearInterval(id);
   }, []);
 
-  // ✅ 2 banners laterales
   const SIDE_PROMOS = {
     top: {
       title: "CASES",
@@ -73,7 +62,7 @@ export function HomePage() {
       tag: "STOCK LIMITADO",
       cta: "Comprar",
       href: "/?type=CASE",
-      image: "/public/cases.png", // ← cambia
+      image: "/cases.png",
     },
     bottom: {
       title: "PROCESADORES",
@@ -81,20 +70,19 @@ export function HomePage() {
       price: "$199.99",
       tag: "CONOCE",
       cta: "Comprar",
-      href: "/?q=Laptop",
-      image: "/public/PROCESADORES.png", // ← cambia
+      href: "/?type=CPU",
+      image: "/PROCESADORES.png",
     },
   } as const;
 
-  // ✅ Sección final (Quiénes somos)
   const ABOUT = {
     title: "Quiénes somos",
     subtitle: "Somos un equipo de emprendedores aficionados por la tecnología",
     text1: "Somos una tienda Gamer en Ecuador.",
     text2: "Manejamos los mejores precios del mercado.",
     cta: "Contáctanos",
-    ctaHref: "/contact", // si no tienes ruta, déjalo o cámbialo por "/"
-    image: "/public/Diamond.png", // ← cambia
+    ctaHref: "/contact",
+    image: "/Diamond.png",
     stats: [
       { big: "2+", label: "Tiendas", desc: "Tiendas físicas en los mejores lugares de la ciudad" },
       { big: "115+", label: "Marcas", desc: "Solo los mejores" },
@@ -102,17 +90,15 @@ export function HomePage() {
     ],
   } as const;
 
-  // ✅ Logos marcas (rutas)
   const BRAND_LOGOS = [
-    { name: "Logitech", src: "/brands/logitech.png" },
-    { name: "NVIDIA", src: "/brands/nvidia.png" },
-    { name: "Corsair", src: "/brands/corsair.png" },
-    { name: "Gigabyte", src: "/brands/gigabyte.png" },
-    { name: "ASUS", src: "/brands/asus.png" },
-    { name: "DeepCool", src: "/brands/deepcool.png" },
+    { name: "Logitech", src: "/public/logitech.png" },
+    { name: "NVIDIA", src: "/public/nvidia.png" },
+    { name: "Corsair", src: "/public/corsair.png" },
+    { name: "Gigabyte", src: "/public/gigabyte.png" },
+    { name: "ASUS", src: "/public/asus.png" },
+    { name: "DeepCool", src: "/public/deepcool.png" },
   ] as const;
 
-  // ✅ Lee ?q= y ?type= desde URL (por buscador del Layout y links)
   useEffect(() => {
     const sp = new URLSearchParams(location.search);
     const qUrl = sp.get("q");
@@ -125,7 +111,6 @@ export function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
 
-  // Fetch por tipo
   useEffect(() => {
     let alive = true;
     setLoading(true);
@@ -161,13 +146,8 @@ export function HomePage() {
 
   return (
     <Layout>
-      {/* =========================
-          HERO PRO (CARRUSEL + 2 PROMOS)
-         ========================= */}
       <section className="grid gap-4 lg:grid-cols-[1.55fr_1fr]">
-        {/* Banner grande - carrusel */}
-        <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-ink-900/60 backdrop-blur">
-          {/* imagen */}
+        <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-ink-900/60 backdrop-blur shadow-[0_0_60px_rgba(34,211,238,0.08)]">
           <div className="absolute inset-0">
             {s.image ? (
               <img
@@ -179,12 +159,10 @@ export function HomePage() {
             ) : (
               <div className="h-full w-full bg-gradient-to-br from-diamond-500/20 via-white/5 to-transparent" />
             )}
-            {/* overlay */}
             <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/35 to-transparent" />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(34,211,238,0.10)_1px,transparent_0)] [background-size:22px_22px] opacity-40" />
           </div>
 
-          {/* contenido */}
           <div className="relative p-6 sm:p-8">
             <div className="flex items-center gap-2">
               <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80">
@@ -214,7 +192,6 @@ export function HomePage() {
               </a>
             </div>
 
-            {/* buscador pro */}
             <div className="mt-6 max-w-xl">
               <div className="flex items-center overflow-hidden rounded-2xl border border-white/15 bg-black/35 backdrop-blur">
                 <span className="px-3 text-white/60">🔎</span>
@@ -250,7 +227,6 @@ export function HomePage() {
               )}
             </div>
 
-            {/* Dots */}
             <div className="mt-6 flex items-center gap-2">
               {SLIDES.map((_, i) => (
                 <button
@@ -267,7 +243,6 @@ export function HomePage() {
               ))}
             </div>
 
-            {/* Prev/Next */}
             <div className="absolute bottom-4 right-4 hidden gap-2 sm:flex">
               <button
                 onClick={() => setSlide((slide - 1 + SLIDES.length) % SLIDES.length)}
@@ -287,9 +262,7 @@ export function HomePage() {
           </div>
         </div>
 
-        {/* 2 banners pequeños */}
         <div className="grid gap-4">
-          {/* top */}
           <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-ink-900/60 backdrop-blur">
             <div className="absolute inset-0">
               {SIDE_PROMOS.top.image ? (
@@ -325,7 +298,6 @@ export function HomePage() {
             </div>
           </div>
 
-          {/* bottom */}
           <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-ink-900/60 backdrop-blur">
             <div className="absolute inset-0">
               {SIDE_PROMOS.bottom.image ? (
@@ -363,9 +335,6 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* =========================
-          CATEGORÍAS PRO
-         ========================= */}
       <section className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
@@ -392,9 +361,6 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* =========================
-          CATÁLOGO
-         ========================= */}
       <section id="catalogo" className="mt-6">
         <div className="mb-3 flex items-end justify-between">
           <div>
@@ -406,7 +372,6 @@ export function HomePage() {
           </div>
         </div>
 
-        {/* Loading skeleton */}
         {loading ? (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -440,7 +405,6 @@ export function HomePage() {
                   key={c.id}
                   className="overflow-hidden rounded-3xl border border-white/10 bg-ink-900/60"
                 >
-                  {/* Imagen clic => detalle */}
                   <Link
                     to={`/components/${c.id}`}
                     className="relative block h-40 border-b border-white/10 bg-white/5"
@@ -477,7 +441,6 @@ export function HomePage() {
                     </div>
                   </Link>
 
-                  {/* Body */}
                   <div className="p-4">
                     <Link to={`/components/${c.id}`} className="block">
                       <p className="text-lg font-semibold hover:underline">{c.brand}</p>
@@ -539,12 +502,8 @@ export function HomePage() {
         )}
       </section>
 
-      {/* =========================
-          SECCIÓN FINAL (QUIÉNES SOMOS + STATS + LOGOS)
-         ========================= */}
       <section className="mt-10 rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8 backdrop-blur">
         <div className="grid gap-8 lg:grid-cols-[1fr_1.15fr_1fr] lg:items-start">
-          {/* Left text */}
           <div>
             <h3 className="text-2xl font-bold">{ABOUT.title}</h3>
             <p className="mt-2 text-white/80">{ABOUT.subtitle}</p>
@@ -560,7 +519,6 @@ export function HomePage() {
             </Link>
           </div>
 
-          {/* Center image */}
           <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-ink-950/40">
             {ABOUT.image ? (
               <img
@@ -575,7 +533,6 @@ export function HomePage() {
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
           </div>
 
-          {/* Right stats */}
           <div className="space-y-6">
             {ABOUT.stats.map((st) => (
               <div key={st.label} className="flex gap-4 border-b border-white/10 pb-5 last:border-b-0 last:pb-0">
@@ -589,13 +546,12 @@ export function HomePage() {
           </div>
         </div>
 
-        {/* Logos row */}
         <div className="mt-8 border-t border-white/10 pt-6">
           <div className="flex flex-wrap items-center justify-center gap-6">
             {BRAND_LOGOS.map((b) => (
               <div
                 key={b.name}
-                className="h-10 w-[120px] grid place-items-center opacity-80 hover:opacity-100 transition"
+                className="grid h-10 w-[120px] place-items-center opacity-80 transition hover:opacity-100"
                 title={b.name}
               >
                 <img
@@ -608,14 +564,8 @@ export function HomePage() {
             ))}
           </div>
 
-          {/* Botoncito opcional como la captura */}
           <div className="mt-6 flex justify-center">
-            <Link
-              to="/"
-              className="rounded-xl border border-white/10 bg-white/5 px-5 py-2 text-sm font-semibold text-white/80 hover:bg-white/10"
-            >
-              Haz clic aquí
-            </Link>
+
           </div>
         </div>
       </section>
