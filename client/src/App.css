@@ -222,3 +222,49 @@ body {
   50%  { background-position: 60% 25%, 40% 10%, 60% 80%, 40% 40%; }
   100% { background-position: 0% 0%, 100% 0%, 50% 100%, 0% 0%; }
 }
+.animate-brand-marquee {
+  animation: brandMarquee 22s linear infinite;
+}
+/* Fondo animado SOLO para HomePage */
+.home-animated-bg{
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .22;
+  filter: blur(0.5px);
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(34,211,238,.22), transparent 45%),
+    radial-gradient(circle at 80% 30%, rgba(56,189,248,.18), transparent 40%),
+    radial-gradient(circle at 55% 85%, rgba(34,211,238,.12), transparent 55%),
+    url("/hero-bg.png");
+  background-size: 900px 900px, 900px 900px, 1200px 1200px, 1400px auto;
+  background-repeat: no-repeat, no-repeat, no-repeat, repeat;
+  background-position: 0% 0%, 100% 0%, 50% 100%, 0% 0%;
+  animation: dg-pan 18s linear infinite;
+  mix-blend-mode: screen;
+}
+
+@keyframes dg-pan {
+  0%   { background-position: 0% 0%, 100% 0%, 50% 100%, 0% 0%; }
+  50%  { background-position: 60% 25%, 40% 10%, 60% 80%, 40% 40%; }
+  100% { background-position: 0% 0%, 100% 0%, 50% 100%, 0% 0%; }
+}
+
+@keyframes brandMarquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(calc(-50% - 8px));
+  }
+}
+
+.animate-brand-marquee {
+  animation: brandMarquee 30s linear infinite;
+  width: max-content;
+}
+
+.animate-brand-marquee:hover {
+  animation-play-state: paused;
+}
