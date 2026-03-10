@@ -23,9 +23,7 @@ type Msg = {
 
 function nowTime() {
   const d = new Date();
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 function money(n: any) {
@@ -39,128 +37,109 @@ function uid() {
 }
 
 function purposeLabel(p: Purpose) {
-  switch (p) {
-    case "gaming":
-      return "Gaming 🎮";
-    case "office":
-      return "Ofimática 💼";
-    case "design":
-      return "Diseño 🎨";
-    case "programming":
-      return "Programación 💻";
-  }
+  const map = { gaming: "Gaming 🎮", office: "Ofimática 💼", design: "Diseño 🎨", programming: "Programación 💻" };
+  return map[p];
 }
 
 function prefLabel(p: Preference) {
-  switch (p) {
-    case "balanced":
-      return "Equilibrado ⚖️";
-    case "performance":
-      return "Más rendimiento 🚀";
-    case "cheap":
-      return "Más barato 💸";
-  }
+  const map = { balanced: "Equilibrado ⚖️", performance: "Rendimiento 🚀", cheap: "Más barato 💸" };
+  return map[p];
 }
 
-type FlowStep =
-  | "WELCOME"
-  | "ASK_PURPOSE"
-  | "ASK_BUDGET"
-  | "ASK_PREFERENCE"
-  | "CONFIRM"
-  | "RESULT";
+type FlowStep = "WELCOME" | "ASK_PURPOSE" | "ASK_BUDGET" | "ASK_PREFERENCE" | "CONFIRM" | "RESULT";
 
-const STORAGE_KEY = "dg_chatbot_v2";
+const STORAGE_KEY = "dg_chatbot_v3";
+
+const PURPOSE_OPTIONS = [
+  { label: "Gaming 🎮", action: "PURPOSE:gaming", desc: "Alto rendimiento gráfico" },
+  { label: "Ofimática 💼", action: "PURPOSE:office", desc: "Productividad diaria" },
+  { label: "Diseño 🎨", action: "PURPOSE:design", desc: "Render y edición" },
+  { label: "Programación 💻", action: "PURPOSE:programming", desc: "Dev y multitarea" },
+];
+
+const BUDGET_OPTIONS = [
+  { label: "$500", action: "BUDGET:500" },
+  { label: "$700", action: "BUDGET:700" },
+  { label: "$900", action: "BUDGET:900" },
+  { label: "$1200", action: "BUDGET:1200" },
+  { label: "Personalizado ✍️", action: "BUDGET:OTHER" },
+];
+
+const PREF_OPTIONS = [
+  { label: "⚖️ Equilibrado", action: "PREF:balanced", desc: "Balanceado en todo" },
+  { label: "🚀 Rendimiento", action: "PREF:performance", desc: "Máxima potencia" },
+  { label: "💸 Económico", action: "PREF:cheap", desc: "Mejor precio" },
+];
 
 export function Chatbot() {
   const nav = useNavigate();
   const cart = useCart();
 
   const [open, setOpen] = useState(true);
-
-  // “estado” del flujo
+  const [minimized, setMinimized] = useState(false);
   const [step, setStep] = useState<FlowStep>("WELCOME");
   const [budget, setBudget] = useState<number>(700);
   const [purpose, setPurpose] = useState<Purpose>("gaming");
   const [preference, setPreference] = useState<Preference>("balanced");
-
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [typing, setTyping] = useState(false);
-
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
-
+  const [manual, setManual] = useState("");
+  const [pulse, setPulse] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
 
-  // ---------- persistencia ----------
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        seedWelcome();
-        return;
-      }
-      const parsed = JSON.parse(raw);
-      if (typeof parsed?.open === "boolean") setOpen(parsed.open);
-      if (parsed?.step) setStep(parsed.step);
-      if (typeof parsed?.budget === "number") setBudget(parsed.budget);
-      if (parsed?.purpose) setPurpose(parsed.purpose);
-      if (parsed?.preference) setPreference(parsed.preference);
-      if (Array.isArray(parsed?.msgs) && parsed.msgs.length) setMsgs(parsed.msgs);
-      if (parsed?.result) setResult(parsed.result);
-
-      // si quedó vacío por cualquier cosa
-      if (!Array.isArray(parsed?.msgs) || parsed.msgs.length === 0) seedWelcome();
-    } catch {
-      seedWelcome();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      if (!raw) { seedWelcome(); return; }
+      const p = JSON.parse(raw);
+      if (typeof p?.open === "boolean") setOpen(p.open);
+      if (p?.step) setStep(p.step);
+      if (typeof p?.budget === "number") setBudget(p.budget);
+      if (p?.purpose) setPurpose(p.purpose);
+      if (p?.preference) setPreference(p.preference);
+      if (Array.isArray(p?.msgs) && p.msgs.length) setMsgs(p.msgs);
+      if (p?.result) setResult(p.result);
+      if (!Array.isArray(p?.msgs) || !p.msgs.length) seedWelcome();
+    } catch { seedWelcome(); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ open, step, budget, purpose, preference, msgs, result })
-      );
-    } catch {
-      // ignore
-    }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ open, step, budget, purpose, preference, msgs, result }));
+    } catch {}
   }, [open, step, budget, purpose, preference, msgs, result]);
 
-  // ---------- autoscroll ----------
   useEffect(() => {
     if (!open) return;
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs, typing, open, result]);
 
-  // ---------- helpers ----------
-  const summary = useMemo(() => {
-    return `Uso: ${purposeLabel(purpose)} • Presupuesto: ${money(budget)} • Preferencia: ${prefLabel(preference)}`;
-  }, [purpose, budget, preference]);
+  // Pulse when minimized and new message
+  useEffect(() => {
+    if (minimized && msgs.length > 0) {
+      setPulse(true);
+      const t = setTimeout(() => setPulse(false), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [msgs.length, minimized]);
+
+  const summary = useMemo(() =>
+    `${purposeLabel(purpose)} • ${money(budget)} • ${prefLabel(preference)}`,
+    [purpose, budget, preference]
+  );
 
   function pushBot(text: string, options?: Option[], tone: Msg["tone"] = "normal") {
-    setMsgs((m) => [
-      ...m,
-      {
-        id: uid(),
-        from: "bot",
-        text,
-        options,
-        time: nowTime(),
-        tone,
-      },
-    ]);
+    setMsgs(m => [...m, { id: uid(), from: "bot", text, options, time: nowTime(), tone }]);
   }
 
   function pushUser(text: string) {
-    setMsgs((m) => [
-      ...m,
-      { id: uid(), from: "user", text, time: nowTime(), tone: "normal" },
-    ]);
+    setMsgs(m => [...m, { id: uid(), from: "user", text, time: nowTime(), tone: "normal" }]);
   }
 
-  function botTyping(ms = 550) {
+  function botTyping(ms = 600) {
     setTyping(true);
     setTimeout(() => setTyping(false), ms);
   }
@@ -168,24 +147,8 @@ export function Chatbot() {
   function seedWelcome() {
     const t = nowTime();
     setMsgs([
-      {
-        id: uid(),
-        from: "bot",
-        time: t,
-        text: "Hola 👋 Soy DiamondBot. Te ayudo a armar una PC según tu presupuesto.",
-      },
-      {
-        id: uid(),
-        from: "bot",
-        time: t,
-        text: "¿En qué la vas a usar?",
-        options: [
-          { label: "Gaming 🎮", action: "PURPOSE:gaming" },
-          { label: "Ofimática 💼", action: "PURPOSE:office" },
-          { label: "Diseño 🎨", action: "PURPOSE:design" },
-          { label: "Programación 💻", action: "PURPOSE:programming" },
-        ],
-      },
+      { id: uid(), from: "bot", time: t, text: "¡Hola! 👋 Soy **DiamondBot**.\nTe ayudo a armar la PC perfecta para ti." },
+      { id: uid(), from: "bot", time: t, text: "¿Para qué vas a usar tu PC?", options: PURPOSE_OPTIONS.map(o => ({ label: o.label, action: o.action })) },
     ]);
     setStep("ASK_PURPOSE");
     setResult(null);
@@ -201,35 +164,13 @@ export function Chatbot() {
     seedWelcome();
   }
 
-  // ---------- acciones de opciones ----------
   async function onOption(action: string) {
-    // bloqueo durante loading para evitar dobles clicks
     if (loading) return;
+    if (action === "RESET") { pushUser("🔄 Reiniciar"); botTyping(300); setTimeout(resetAll, 400); return; }
+    if (action === "OPEN_CART") { pushUser("Ver carrito 🛒"); nav("/cart"); return; }
+    if (action === "ADD_ALL") { pushUser("Agregar todo al carrito 🛒"); addAllToCart(); return; }
+    if (action === "GO_CHECKOUT") { pushUser("Ir a pagar ✅"); nav("/checkout"); return; }
 
-    // “atajos” globales
-    if (action === "RESET") {
-      pushUser("Reiniciar");
-      botTyping();
-      resetAll();
-      return;
-    }
-    if (action === "OPEN_CART") {
-      pushUser("Ver carrito");
-      nav("/cart");
-      return;
-    }
-    if (action === "ADD_ALL") {
-      pushUser("Agregar todo al carrito");
-      addAllToCart();
-      return;
-    }
-    if (action === "GO_CHECKOUT") {
-      pushUser("Ir a pagar");
-      nav("/checkout");
-      return;
-    }
-
-    // parse acción tipo "PURPOSE:gaming"
     const [kind, value] = action.split(":");
 
     if (kind === "PURPOSE") {
@@ -237,42 +178,25 @@ export function Chatbot() {
       setPurpose(p);
       pushUser(purposeLabel(p));
       botTyping();
-
       setStep("ASK_BUDGET");
-      pushBot("Perfecto ✅ ¿Cuál es tu presupuesto aproximado?", [
-        { label: "$500", action: "BUDGET:500" },
-        { label: "$700", action: "BUDGET:700" },
-        { label: "$900", action: "BUDGET:900" },
-        { label: "$1200", action: "BUDGET:1200" },
-        { label: "Otro ✍️", action: "BUDGET:OTHER" },
-      ]);
+      pushBot("Genial 🎯 ¿Cuál es tu presupuesto?", BUDGET_OPTIONS);
       return;
     }
 
     if (kind === "BUDGET") {
       if (value === "OTHER") {
-        pushUser("Otro presupuesto");
+        pushUser("Presupuesto personalizado ✍️");
         botTyping();
-        pushBot(
-          "Escríbeme un número (ej: 850).",
-          undefined
-        );
-        // aquí dejamos el input “manual” habilitado
+        pushBot("Escribe tu presupuesto en dólares (ej: 850).");
         setStep("ASK_BUDGET");
         return;
       }
-
       const b = Number(value);
       setBudget(b);
       pushUser(money(b));
       botTyping();
-
       setStep("ASK_PREFERENCE");
-      pushBot("¿Qué prefieres priorizar?", [
-        { label: "Equilibrado ⚖️", action: "PREF:balanced" },
-        { label: "Rendimiento 🚀", action: "PREF:performance" },
-        { label: "Más barato 💸", action: "PREF:cheap" },
-      ]);
+      pushBot("¿Qué prefieres priorizar en tu build?", PREF_OPTIONS.map(o => ({ label: o.label, action: o.action })));
       return;
     }
 
@@ -280,55 +204,37 @@ export function Chatbot() {
       const pref = value as Preference;
       setPreference(pref);
       pushUser(prefLabel(pref));
-      botTyping();
-
+      botTyping(700);
       setStep("CONFIRM");
-      pushBot(`Listo. Confirmo tus datos:\n${summary}`, [
-        { label: "✅ Confirmar", action: "CONFIRM:YES" },
-        { label: "Cambiar uso", action: "CONFIRM:CHANGE_PURPOSE" },
-        { label: "Cambiar presupuesto", action: "CONFIRM:CHANGE_BUDGET" },
-        { label: "Reiniciar", action: "RESET" },
-      ]);
+      setTimeout(() => {
+        pushBot(`Perfecto ✨ Aquí están tus datos:\n\n${summary}`, [
+          { label: "✅ ¡Armar mi PC!", action: "CONFIRM:YES" },
+          { label: "✏️ Cambiar uso", action: "CONFIRM:CHANGE_PURPOSE" },
+          { label: "💰 Cambiar presupuesto", action: "CONFIRM:CHANGE_BUDGET" },
+          { label: "🔄 Reiniciar", action: "RESET" },
+        ]);
+      }, 750);
       return;
     }
 
     if (kind === "CONFIRM") {
-      if (value === "YES") {
-        pushUser("Confirmar");
-        botTyping(450);
-        await handleRecommend();
-        return;
-      }
+      if (value === "YES") { pushUser("¡Armar mi PC! 🚀"); botTyping(400); await handleRecommend(); return; }
       if (value === "CHANGE_PURPOSE") {
         pushUser("Cambiar uso");
         botTyping();
         setStep("ASK_PURPOSE");
-        pushBot("Claro. ¿En qué la vas a usar?", [
-          { label: "Gaming 🎮", action: "PURPOSE:gaming" },
-          { label: "Ofimática 💼", action: "PURPOSE:office" },
-          { label: "Diseño 🎨", action: "PURPOSE:design" },
-          { label: "Programación 💻", action: "PURPOSE:programming" },
-        ]);
+        pushBot("Claro, ¿en qué la vas a usar?", PURPOSE_OPTIONS.map(o => ({ label: o.label, action: o.action })));
         return;
       }
       if (value === "CHANGE_BUDGET") {
         pushUser("Cambiar presupuesto");
         botTyping();
         setStep("ASK_BUDGET");
-        pushBot("Dime tu presupuesto:", [
-          { label: "$500", action: "BUDGET:500" },
-          { label: "$700", action: "BUDGET:700" },
-          { label: "$900", action: "BUDGET:900" },
-          { label: "$1200", action: "BUDGET:1200" },
-          { label: "Otro ✍️", action: "BUDGET:OTHER" },
-        ]);
+        pushBot("¿Cuál sería tu nuevo presupuesto?", BUDGET_OPTIONS);
         return;
       }
     }
   }
-
-  // ---------- input manual (presupuesto “otro”) ----------
-  const [manual, setManual] = useState("");
 
   function canSendManual() {
     const n = Number(manual);
@@ -342,72 +248,47 @@ export function Chatbot() {
     setBudget(n);
     pushUser(money(n));
     botTyping();
-
     setStep("ASK_PREFERENCE");
-    pushBot("¿Qué prefieres priorizar?", [
-      { label: "Equilibrado ⚖️", action: "PREF:balanced" },
-      { label: "Rendimiento 🚀", action: "PREF:performance" },
-      { label: "Más barato 💸", action: "PREF:cheap" },
-    ]);
+    pushBot("¿Qué prefieres priorizar?", PREF_OPTIONS.map(o => ({ label: o.label, action: o.action })));
   }
 
-  // ---------- recommend ----------
   async function handleRecommend() {
     const b = Number(budget);
     if (!Number.isFinite(b) || b < 100) {
-      pushBot("Tu presupuesto debe ser al menos $100.", undefined, "error");
+      pushBot("El presupuesto mínimo es $100.", undefined, "error");
       setStep("ASK_BUDGET");
       return;
     }
-
     setLoading(true);
     setResult(null);
     setStep("RESULT");
-
-    // “thinking”
     setTyping(true);
-
     try {
-      const data = await recommendBuild({
-        budget: b,
-        purpose,
-        preference,
-      } as any);
-
+      const data = await recommendBuild({ budget: b, purpose, preference } as any);
       setResult(data);
       setTyping(false);
-
-      pushBot(data.message ?? "Aquí está tu recomendación ✅", undefined, "success");
-
-      // resumen corto
+      pushBot(data.message ?? "¡Aquí está tu build ideal! 🖥️✨", undefined, "success");
       const parts = data?.parts || {};
       const lines = [
-        parts.cpu ? `CPU: ${parts.cpu.brand} ${parts.cpu.model}` : null,
-        parts.gpu ? `GPU: ${parts.gpu.brand} ${parts.gpu.model}` : null,
-        parts.ram ? `RAM: ${parts.ram.brand} ${parts.ram.model}` : null,
-        parts.ssd ? `SSD: ${parts.ssd.brand} ${parts.ssd.model}` : null,
-        parts.psu ? `PSU: ${parts.psu.brand} ${parts.psu.model}` : null,
+        parts.cpu ? `🔵 CPU: ${parts.cpu.brand} ${parts.cpu.model}` : null,
+        parts.gpu ? `🟢 GPU: ${parts.gpu.brand} ${parts.gpu.model}` : null,
+        parts.ram ? `🟡 RAM: ${parts.ram.brand} ${parts.ram.model}` : null,
+        parts.ssd ? `🟠 SSD: ${parts.ssd.brand} ${parts.ssd.model}` : null,
+        parts.psu ? `🔴 PSU: ${parts.psu.brand} ${parts.psu.model}` : null,
       ].filter(Boolean);
-
-      pushBot(`✅ Selección:\n${lines.join("\n")}\nTotal aprox: ${money(data.total)}`);
-
-      // botones finales
-      pushBot("¿Qué hacemos ahora?", [
-        { label: "Agregar todo al carrito 🛒", action: "ADD_ALL" },
-        { label: `Ver carrito (${cart.count})`, action: "OPEN_CART" },
-        { label: "Ir a pagar ✅", action: "GO_CHECKOUT" },
-        { label: "Reiniciar 🔄", action: "RESET" },
+      pushBot(`${lines.join("\n")}\n\n💰 Total: ${money(data.total)}`);
+      pushBot("¿Qué hacemos con esta build?", [
+        { label: "🛒 Agregar todo al carrito", action: "ADD_ALL" },
+        { label: `👜 Ver carrito (${cart.count})`, action: "OPEN_CART" },
+        { label: "💳 Ir a pagar", action: "GO_CHECKOUT" },
+        { label: "🔄 Nueva búsqueda", action: "RESET" },
       ]);
     } catch {
       setTyping(false);
-      pushBot(
-        "Ups… no pude conectar con el servidor 😕 (revisa que el backend esté en http://localhost:4000)",
-        [
-          { label: "Reintentar", action: "CONFIRM:YES" },
-          { label: "Reiniciar", action: "RESET" },
-        ],
-        "error"
-      );
+      pushBot("No pude conectar con el servidor 😕\n(verifica que el backend esté activo)", [
+        { label: "🔁 Reintentar", action: "CONFIRM:YES" },
+        { label: "🔄 Reiniciar", action: "RESET" },
+      ], "error");
     } finally {
       setLoading(false);
       setTyping(false);
@@ -415,91 +296,578 @@ export function Chatbot() {
   }
 
   function addAllToCart() {
-    if (!result?.parts) {
-      pushBot("Aún no tengo una recomendación para agregar.", undefined, "error");
-      return;
-    }
-
+    if (!result?.parts) { pushBot("Aún no tengo una recomendación.", undefined, "error"); return; }
     const parts = result.parts;
     const list = [parts.cpu, parts.gpu, parts.ram, parts.ssd, parts.psu].filter(Boolean);
-
-    // evita duplicados
     const idsInCart = new Set(cart.items.map((x: any) => x.id));
-
     list.forEach((p: any) => {
       if (idsInCart.has(p.id)) return;
-      cart.add(
-        {
-          id: p.id,
-          type: p.type,
-          brand: p.brand,
-          model: p.model,
-          price: Number(p.price ?? 0),
-          imageUrl: p.imageUrl ?? null,
-        },
-        1
-      );
+      cart.add({ id: p.id, type: p.type, brand: p.brand, model: p.model, price: Number(p.price ?? 0), imageUrl: p.imageUrl ?? null }, 1);
     });
-
-    pushBot("✅ Listo. Agregué la recomendación al carrito.", undefined, "success");
+    pushBot("✅ ¡Listo! Todo está en tu carrito.", [
+      { label: "👜 Ver carrito", action: "OPEN_CART" },
+      { label: "💳 Ir a pagar", action: "GO_CHECKOUT" },
+    ], "success");
   }
 
-  // ---------- UI ----------
-  return (
-    <div className="fixed bottom-6 right-6 z-[9999] w-[380px] max-w-[calc(100vw-48px)] pointer-events-auto">
-      <div className="overflow-hidden rounded-2xl border border-white/10 bg-ink-900/70 backdrop-blur-xl shadow-2xl pointer-events-auto">
-        {/* header */}
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="flex w-full items-center justify-between px-4 py-3 text-left"
-        >
-          <div className="flex items-center gap-3">
-            <div className="relative h-9 w-9 rounded-2xl bg-gradient-to-br from-diamond-300 to-diamond-600 shadow-glow">
-              <span className="absolute inset-0 grid place-items-center text-sm font-black">🤖</span>
-            </div>
-            <div>
-              <p className="text-sm font-semibold">DiamondBot</p>
-              <p className="text-xs text-white/60">Asistente guiado</p>
-            </div>
-          </div>
-          <span className="text-white/60">{open ? "—" : "+"}</span>
-        </button>
+  const progressSteps = ["Uso", "Presupuesto", "Preferencia", "Confirmar", "Resultado"];
+  const currentProgress = { WELCOME: 0, ASK_PURPOSE: 0, ASK_BUDGET: 1, ASK_PREFERENCE: 2, CONFIRM: 3, RESULT: 4 }[step] ?? 0;
 
-        {open && (
-          <div className="border-t border-white/10">
-            {/* messages */}
-            <div className="max-h-[280px] space-y-2 overflow-auto px-4 py-3">
+  return (
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+        .cb-root * { box-sizing: border-box; margin: 0; padding: 0; }
+        .cb-root { font-family: 'DM Sans', sans-serif; }
+
+        .cb-fab {
+          position: fixed;
+          bottom: 24px;
+          right: 24px;
+          z-index: 9999;
+        }
+
+        .cb-toggle-btn {
+          width: 56px;
+          height: 56px;
+          border-radius: 18px;
+          background: linear-gradient(135deg, #0ea5e9, #6366f1);
+          border: none;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 22px;
+          box-shadow: 0 8px 32px rgba(99,102,241,0.45), 0 2px 8px rgba(0,0,0,0.3);
+          transition: transform 0.2s, box-shadow 0.2s;
+          position: relative;
+        }
+        .cb-toggle-btn:hover { transform: scale(1.08); box-shadow: 0 12px 40px rgba(99,102,241,0.55); }
+
+        .cb-badge {
+          position: absolute;
+          top: -6px;
+          right: -6px;
+          background: #f43f5e;
+          color: white;
+          font-size: 10px;
+          font-weight: 700;
+          width: 20px;
+          height: 20px;
+          border-radius: 999px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 2px solid #0f0f17;
+          animation: cb-pop 0.3s cubic-bezier(0.34,1.56,0.64,1);
+        }
+
+        @keyframes cb-pop {
+          0% { transform: scale(0); }
+          100% { transform: scale(1); }
+        }
+
+        @keyframes cb-pulse-ring {
+          0% { box-shadow: 0 0 0 0 rgba(99,102,241,0.5); }
+          70% { box-shadow: 0 0 0 14px rgba(99,102,241,0); }
+          100% { box-shadow: 0 0 0 0 rgba(99,102,241,0); }
+        }
+
+        .cb-pulse { animation: cb-pulse-ring 1.5s ease-out infinite; }
+
+        .cb-window {
+          position: fixed;
+          bottom: 92px;
+          right: 24px;
+          z-index: 9998;
+          width: 400px;
+          max-width: calc(100vw - 32px);
+          border-radius: 24px;
+          overflow: hidden;
+          background: #0f0f17;
+          border: 1px solid rgba(255,255,255,0.08);
+          box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04) inset;
+          display: flex;
+          flex-direction: column;
+          animation: cb-slide-up 0.35s cubic-bezier(0.34,1.3,0.64,1);
+          max-height: 600px;
+        }
+
+        @keyframes cb-slide-up {
+          0% { opacity: 0; transform: translateY(20px) scale(0.96); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        /* Header */
+        .cb-header {
+          padding: 16px 18px;
+          background: linear-gradient(135deg, rgba(14,165,233,0.12), rgba(99,102,241,0.12));
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-shrink: 0;
+        }
+
+        .cb-avatar {
+          width: 40px;
+          height: 40px;
+          border-radius: 14px;
+          background: linear-gradient(135deg, #0ea5e9, #6366f1);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 18px;
+          box-shadow: 0 4px 16px rgba(99,102,241,0.35);
+          flex-shrink: 0;
+        }
+
+        .cb-header-info { flex: 1; }
+        .cb-header-name { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 14px; color: #fff; letter-spacing: -0.01em; }
+        .cb-header-status { display: flex; align-items: center; gap: 5px; margin-top: 2px; }
+        .cb-status-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,0.6); animation: cb-blink 2s ease infinite; }
+        @keyframes cb-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .cb-status-text { font-size: 11px; color: rgba(255,255,255,0.45); font-weight: 500; }
+
+        .cb-header-actions { display: flex; gap: 6px; }
+        .cb-icon-btn {
+          width: 30px; height: 30px;
+          border-radius: 10px;
+          border: 1px solid rgba(255,255,255,0.08);
+          background: rgba(255,255,255,0.04);
+          color: rgba(255,255,255,0.45);
+          cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 13px;
+          transition: background 0.15s, color 0.15s;
+        }
+        .cb-icon-btn:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8); }
+
+        /* Progress */
+        .cb-progress {
+          padding: 10px 18px 12px;
+          border-bottom: 1px solid rgba(255,255,255,0.05);
+          flex-shrink: 0;
+          background: rgba(255,255,255,0.02);
+        }
+
+        .cb-progress-steps {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .cb-step-item {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          flex: 1;
+        }
+
+        .cb-step-dot {
+          width: 22px;
+          height: 22px;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 9px;
+          font-weight: 700;
+          flex-shrink: 0;
+          transition: all 0.3s;
+        }
+
+        .cb-step-dot.done { background: linear-gradient(135deg, #0ea5e9, #6366f1); color: white; }
+        .cb-step-dot.active { background: rgba(99,102,241,0.2); color: #818cf8; border: 1.5px solid rgba(99,102,241,0.4); }
+        .cb-step-dot.idle { background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.06); }
+
+        .cb-step-line {
+          flex: 1;
+          height: 2px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.06);
+          overflow: hidden;
+        }
+
+        .cb-step-line-fill {
+          height: 100%;
+          border-radius: 999px;
+          background: linear-gradient(90deg, #0ea5e9, #6366f1);
+          transition: width 0.4s ease;
+        }
+
+        /* Messages */
+        .cb-messages {
+          flex: 1;
+          overflow-y: auto;
+          padding: 14px 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          scrollbar-width: thin;
+          scrollbar-color: rgba(255,255,255,0.08) transparent;
+        }
+
+        .cb-messages::-webkit-scrollbar { width: 4px; }
+        .cb-messages::-webkit-scrollbar-track { background: transparent; }
+        .cb-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+
+        .cb-msg-row { display: flex; flex-direction: column; animation: cb-msg-in 0.25s ease; }
+        @keyframes cb-msg-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        .cb-msg-row.user { align-items: flex-end; }
+
+        .cb-bubble {
+          max-width: 88%;
+          border-radius: 18px;
+          padding: 10px 13px;
+          font-size: 13.5px;
+          line-height: 1.55;
+          white-space: pre-line;
+          word-break: break-word;
+        }
+
+        .cb-bubble.bot {
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.07);
+          color: rgba(255,255,255,0.88);
+          border-bottom-left-radius: 6px;
+        }
+
+        .cb-bubble.user {
+          background: linear-gradient(135deg, rgba(14,165,233,0.25), rgba(99,102,241,0.25));
+          border: 1px solid rgba(99,102,241,0.25);
+          color: rgba(255,255,255,0.92);
+          border-bottom-right-radius: 6px;
+        }
+
+        .cb-bubble.error {
+          background: rgba(244,63,94,0.08);
+          border-color: rgba(244,63,94,0.18);
+          color: rgba(252,165,165,0.9);
+        }
+
+        .cb-bubble.success {
+          background: rgba(34,197,94,0.08);
+          border-color: rgba(34,197,94,0.18);
+          color: rgba(134,239,172,0.9);
+        }
+
+        .cb-time {
+          font-size: 10px;
+          color: rgba(255,255,255,0.25);
+          margin-bottom: 4px;
+          padding: 0 4px;
+        }
+
+        /* Options */
+        .cb-options {
+          margin-top: 8px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .cb-option-btn {
+          width: 100%;
+          text-align: left;
+          border-radius: 13px;
+          border: 1px solid rgba(255,255,255,0.07);
+          background: rgba(255,255,255,0.04);
+          color: rgba(255,255,255,0.82);
+          font-size: 13px;
+          font-family: 'DM Sans', sans-serif;
+          font-weight: 500;
+          padding: 10px 13px;
+          cursor: pointer;
+          transition: all 0.15s;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .cb-option-btn:hover:not(:disabled) {
+          background: rgba(99,102,241,0.12);
+          border-color: rgba(99,102,241,0.3);
+          color: #fff;
+          transform: translateX(2px);
+        }
+
+        .cb-option-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+        .cb-option-btn.primary {
+          background: linear-gradient(135deg, rgba(14,165,233,0.15), rgba(99,102,241,0.15));
+          border-color: rgba(99,102,241,0.25);
+          color: rgba(255,255,255,0.9);
+        }
+
+        .cb-option-btn.primary:hover:not(:disabled) {
+          background: linear-gradient(135deg, rgba(14,165,233,0.25), rgba(99,102,241,0.25));
+          border-color: rgba(99,102,241,0.45);
+        }
+
+        /* Typing */
+        .cb-typing {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 10px 13px;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 18px;
+          border-bottom-left-radius: 6px;
+          width: fit-content;
+        }
+
+        .cb-typing span {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: rgba(99,102,241,0.6);
+          animation: cb-typing-dot 1.2s ease infinite;
+        }
+
+        .cb-typing span:nth-child(2) { animation-delay: 0.15s; }
+        .cb-typing span:nth-child(3) { animation-delay: 0.3s; }
+
+        @keyframes cb-typing-dot {
+          0%, 60%, 100% { transform: translateY(0); opacity: 0.6; }
+          30% { transform: translateY(-5px); opacity: 1; }
+        }
+
+        /* Result card */
+        .cb-result-card {
+          border-radius: 18px;
+          border: 1px solid rgba(255,255,255,0.08);
+          background: rgba(255,255,255,0.03);
+          overflow: hidden;
+          animation: cb-msg-in 0.3s ease;
+        }
+
+        .cb-result-header {
+          padding: 12px 14px;
+          background: linear-gradient(135deg, rgba(14,165,233,0.1), rgba(99,102,241,0.1));
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+
+        .cb-result-title { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 13px; color: rgba(255,255,255,0.9); }
+        .cb-result-total { font-size: 13px; font-weight: 700; color: #22d3ee; }
+
+        .cb-parts-list { padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+
+        .cb-part-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 9px 11px;
+          border-radius: 12px;
+          border: 1px solid rgba(255,255,255,0.05);
+          background: rgba(255,255,255,0.025);
+          transition: background 0.15s;
+        }
+
+        .cb-part-row:hover { background: rgba(255,255,255,0.05); }
+
+        .cb-part-img {
+          width: 38px;
+          height: 38px;
+          border-radius: 9px;
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.07);
+          overflow: hidden;
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .cb-part-img img { width: 100%; height: 100%; object-fit: contain; padding: 4px; }
+
+        .cb-part-type {
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: rgba(255,255,255,0.3);
+        }
+
+        .cb-part-name {
+          font-size: 12px;
+          font-weight: 600;
+          color: rgba(255,255,255,0.85);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .cb-part-price {
+          font-size: 12px;
+          font-weight: 700;
+          color: #22d3ee;
+          flex-shrink: 0;
+          margin-left: auto;
+        }
+
+        .cb-result-add-btn {
+          margin: 0 10px 10px;
+          width: calc(100% - 20px);
+          border: none;
+          border-radius: 12px;
+          padding: 11px;
+          font-size: 13px;
+          font-weight: 700;
+          font-family: 'DM Sans', sans-serif;
+          background: linear-gradient(135deg, #0ea5e9, #6366f1);
+          color: white;
+          cursor: pointer;
+          transition: transform 0.15s, box-shadow 0.15s;
+          box-shadow: 0 4px 20px rgba(99,102,241,0.3);
+        }
+
+        .cb-result-add-btn:hover { transform: scale(1.02); box-shadow: 0 6px 24px rgba(99,102,241,0.4); }
+
+        /* Footer */
+        .cb-footer {
+          padding: 10px 14px 14px;
+          border-top: 1px solid rgba(255,255,255,0.05);
+          flex-shrink: 0;
+          background: rgba(255,255,255,0.01);
+        }
+
+        .cb-input-row {
+          display: flex;
+          gap: 8px;
+          margin-bottom: 8px;
+        }
+
+        .cb-input {
+          flex: 1;
+          border-radius: 12px;
+          border: 1px solid rgba(255,255,255,0.08);
+          background: rgba(255,255,255,0.05);
+          padding: 10px 13px;
+          color: white;
+          font-size: 13px;
+          font-family: 'DM Sans', sans-serif;
+          outline: none;
+          transition: border-color 0.2s, background 0.2s;
+        }
+
+        .cb-input::placeholder { color: rgba(255,255,255,0.2); }
+        .cb-input:focus { border-color: rgba(99,102,241,0.4); background: rgba(255,255,255,0.07); }
+
+        .cb-send-btn {
+          border-radius: 12px;
+          border: none;
+          background: linear-gradient(135deg, #0ea5e9, #6366f1);
+          color: white;
+          font-weight: 700;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 13px;
+          padding: 10px 16px;
+          cursor: pointer;
+          transition: transform 0.15s, opacity 0.15s;
+          box-shadow: 0 3px 12px rgba(99,102,241,0.3);
+        }
+
+        .cb-send-btn:hover:not(:disabled) { transform: scale(1.04); }
+        .cb-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .cb-footer-actions {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 6px;
+        }
+
+        .cb-footer-btn {
+          border-radius: 11px;
+          border: 1px solid rgba(255,255,255,0.07);
+          background: rgba(255,255,255,0.04);
+          color: rgba(255,255,255,0.6);
+          font-size: 12px;
+          font-family: 'DM Sans', sans-serif;
+          font-weight: 500;
+          padding: 8px 10px;
+          cursor: pointer;
+          transition: all 0.15s;
+          text-align: center;
+        }
+
+        .cb-footer-btn:hover { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.85); }
+        .cb-footer-btn.cart { border-color: rgba(14,165,233,0.2); background: rgba(14,165,233,0.07); color: rgba(125,211,252,0.8); }
+        .cb-footer-btn.cart:hover { background: rgba(14,165,233,0.12); color: rgba(125,211,252,1); }
+      `}</style>
+
+      <div className="cb-root">
+        {/* FAB toggle button */}
+        <div className="cb-fab">
+          <button
+            className={`cb-toggle-btn ${pulse ? "cb-pulse" : ""}`}
+            onClick={() => setMinimized(v => !v)}
+            title="DiamondBot"
+          >
+            {minimized ? "🤖" : "✕"}
+            {cart.count > 0 && <span className="cb-badge">{cart.count}</span>}
+          </button>
+        </div>
+
+        {/* Chat window */}
+        {!minimized && (
+          <div className="cb-window">
+            {/* Header */}
+            <div className="cb-header">
+              <div className="cb-avatar">🤖</div>
+              <div className="cb-header-info">
+                <div className="cb-header-name">DiamondBot</div>
+                <div className="cb-header-status">
+                  <div className="cb-status-dot" />
+                  <span className="cb-status-text">{loading ? "Analizando builds..." : "En línea"}</span>
+                </div>
+              </div>
+              <div className="cb-header-actions">
+                <button className="cb-icon-btn" onClick={resetAll} title="Reiniciar">↺</button>
+                <button className="cb-icon-btn" onClick={() => setMinimized(true)} title="Minimizar">—</button>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div className="cb-progress">
+              <div className="cb-progress-steps">
+                {progressSteps.map((label, i) => (
+                  <div className="cb-step-item" key={i}>
+                    <div className={`cb-step-dot ${i < currentProgress ? "done" : i === currentProgress ? "active" : "idle"}`}>
+                      {i < currentProgress ? "✓" : i + 1}
+                    </div>
+                    {i < progressSteps.length - 1 && (
+                      <div className="cb-step-line">
+                        <div className="cb-step-line-fill" style={{ width: i < currentProgress ? "100%" : "0%" }} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Messages */}
+            <div className="cb-messages">
               {msgs.map((m) => {
                 const isBot = m.from === "bot";
-                const bubble =
-                  m.tone === "error"
-                    ? "border border-red-400/20 bg-red-500/10 text-red-200"
-                    : m.tone === "success"
-                      ? "border border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
-                      : isBot
-                        ? "bg-white/5 text-white/90"
-                        : "ml-auto bg-diamond-500/20 text-white border border-diamond-300/20";
-
                 return (
-                  <div key={m.id} className={isBot ? "" : "flex justify-end"}>
-                    <div className={["max-w-[90%] rounded-2xl px-3 py-2 text-sm whitespace-pre-line", bubble].join(" ")}>
-                      {/* hora */}
-                      {m.time && (
-                        <div className="mb-1 text-[10px] text-white/50">
-                          {m.time}
-                        </div>
-                      )}
+                  <div key={m.id} className={`cb-msg-row ${isBot ? "bot" : "user"}`}>
+                    {m.time && <div className="cb-time">{m.time}</div>}
+                    <div className={`cb-bubble ${isBot ? "bot" : "user"} ${m.tone === "error" ? "error" : m.tone === "success" ? "success" : ""}`}>
                       {m.text}
-
-                      {/* quick replies */}
                       {m.options && m.options.length > 0 && (
-                        <div className="mt-2 flex flex-col gap-2">
+                        <div className="cb-options">
                           {m.options.map((o, idx) => (
                             <button
                               key={idx}
+                              className={`cb-option-btn ${idx === 0 && (o.action.includes("CONFIRM") || o.action.includes("ADD")) ? "primary" : ""}`}
                               onClick={() => onOption(o.action)}
                               disabled={loading}
-                              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90 hover:bg-white/10 disabled:opacity-50"
                             >
                               {o.label}
                             </button>
@@ -511,64 +879,42 @@ export function Chatbot() {
                 );
               })}
 
-              {/* typing */}
               {typing && (
-                <div className="max-w-[90%] rounded-2xl bg-white/5 px-3 py-2 text-sm text-white/70">
-                  <div className="mb-1 text-[10px] text-white/50">{nowTime()}</div>
-                  DiamondBot está escribiendo…
+                <div className="cb-msg-row bot">
+                  <div className="cb-time">{nowTime()}</div>
+                  <div className="cb-typing">
+                    <span /><span /><span />
+                  </div>
                 </div>
               )}
 
-              {/* render recomendación con mini-cards */}
               {result?.parts && (
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <p className="font-semibold text-white/90">Recomendación</p>
-                    <p className="text-white/70">
-                      Total: <span className="text-white">{money(result.total)}</span>
-                    </p>
+                <div className="cb-result-card">
+                  <div className="cb-result-header">
+                    <span className="cb-result-title">🖥️ Tu Build Recomendada</span>
+                    <span className="cb-result-total">{money(result.total)}</span>
                   </div>
-
-                  <div className="mt-3 grid gap-2">
+                  <div className="cb-parts-list">
                     {(["cpu", "gpu", "ram", "ssd", "psu"] as const).map((k) => {
                       const p = result.parts?.[k];
                       if (!p) return null;
                       const img = p.imageUrl ? `${API_BASE}${p.imageUrl}` : null;
-
                       return (
-                        <div
-                          key={k}
-                          className="flex items-center gap-3 rounded-2xl border border-white/10 bg-ink-950/40 p-3"
-                        >
-                          <div className="h-10 w-10 overflow-hidden rounded-xl border border-white/10 bg-white/5">
-                            {img ? (
-                              <img
-                                src={img}
-                                alt={`${p.brand} ${p.model}`}
-                                className="h-full w-full object-contain p-1"
-                                draggable={false}
-                              />
-                            ) : (
-                              <div className="h-full w-full" />
-                            )}
+                        <div key={k} className="cb-part-row">
+                          <div className="cb-part-img">
+                            {img ? <img src={img} alt={`${p.brand} ${p.model}`} draggable={false} /> : <span style={{ fontSize: 16 }}>💾</span>}
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs uppercase text-white/60">{k}</p>
-                            <p className="truncate font-semibold">
-                              {p.brand} {p.model}
-                            </p>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div className="cb-part-type">{k}</div>
+                            <div className="cb-part-name">{p.brand} {p.model}</div>
                           </div>
-                          <p className="text-sm text-diamond-200">{money(p.price)}</p>
+                          <div className="cb-part-price">{money(p.price)}</div>
                         </div>
                       );
                     })}
                   </div>
-
-                  <button
-                    onClick={() => onOption("ADD_ALL")}
-                    className="mt-3 w-full rounded-xl bg-gradient-to-r from-diamond-400 to-diamond-600 px-4 py-2 font-semibold shadow-glow"
-                  >
-                    Agregar todo al carrito
+                  <button className="cb-result-add-btn" onClick={() => onOption("ADD_ALL")}>
+                    🛒 Agregar todo al carrito
                   </button>
                 </div>
               )}
@@ -576,46 +922,36 @@ export function Chatbot() {
               <div ref={endRef} />
             </div>
 
-            {/* footer controls */}
-            <div className="grid gap-3 px-4 pb-4">
-              {/* Manual input solo cuando el bot lo pide (ASK_BUDGET con OTHER) */}
+            {/* Footer */}
+            <div className="cb-footer">
               {step === "ASK_BUDGET" && (
-                <div className="grid grid-cols-[1fr_auto] gap-2">
+                <div className="cb-input-row">
                   <input
+                    className="cb-input"
                     value={manual}
-                    onChange={(e) => setManual(e.target.value.replace(/[^\d.]/g, ""))}
+                    onChange={e => setManual(e.target.value.replace(/[^\d.]/g, ""))}
                     placeholder="Ej: 850"
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none focus:border-diamond-300/40"
+                    onKeyDown={e => e.key === "Enter" && canSendManual() && sendManual()}
                   />
                   <button
+                    className="cb-send-btn"
                     disabled={!canSendManual()}
                     onClick={sendManual}
-                    className="rounded-xl bg-gradient-to-r from-diamond-400 to-diamond-600 px-4 py-2 font-semibold shadow-glow disabled:opacity-60"
                   >
                     Enviar
                   </button>
                 </div>
               )}
-
-              {/* mini acciones */}
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => onOption("RESET")}
-                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80 hover:bg-white/10"
-                >
-                  Reiniciar
-                </button>
-                <button
-                  onClick={() => nav("/cart")}
-                  className="rounded-xl border border-diamond-300/20 bg-diamond-500/10 px-4 py-2 text-sm text-white/90 hover:bg-diamond-500/20"
-                >
-                  Ver carrito ({cart.count})
+              <div className="cb-footer-actions">
+                <button className="cb-footer-btn" onClick={() => onOption("RESET")}>🔄 Reiniciar</button>
+                <button className="cb-footer-btn cart" onClick={() => nav("/cart")}>
+                  👜 Carrito ({cart.count})
                 </button>
               </div>
             </div>
           </div>
         )}
       </div>
-    </div>
+    </>
   );
 }

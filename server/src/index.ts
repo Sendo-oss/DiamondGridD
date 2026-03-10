@@ -2,7 +2,15 @@ import express from "express";
 import cors from "cors";
 import { PrismaClient, OrderStatus, PaymentMethod } from "@prisma/client";
 import { z } from "zod";
-import { login, register, requireAuth, requireRole, googleLogin } from "./auth";
+import {
+  login,
+  register,
+  requireAuth,
+  requireRole,
+  googleLogin,
+  forgotPassword,
+  resetPassword,
+} from "./auth";
 import path from "path";
 import multer from "multer";
 import fs from "fs";
@@ -13,12 +21,18 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ✅ asegurar carpeta uploads
+const uploadsDir = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
 // ✅ Servir carpeta uploads
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+app.use("/uploads", express.static(uploadsDir));
 
 // ✅ Multer config
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, "uploads"),
+  destination: (_req, _file, cb) => cb(null, uploadsDir),
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname || "");
     cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
@@ -34,7 +48,7 @@ function removeUploadByUrl(imageUrl?: string | null) {
   if (!imageUrl) return;
   const rel = imageUrl.startsWith("/uploads/") ? imageUrl.slice("/uploads/".length) : null;
   if (!rel) return;
-  const filePath = path.join(process.cwd(), "uploads", rel);
+  const filePath = path.join(uploadsDir, rel);
   if (fs.existsSync(filePath)) {
     try {
       fs.unlinkSync(filePath);
@@ -48,6 +62,12 @@ function makeOrderNumber(id: string) {
   return `DG-${year}-${short}`;
 }
 
+function parseMetaSafe(metaValue: unknown) {
+  if (!metaValue) return undefined;
+  if (typeof metaValue !== "string") return undefined;
+  return JSON.parse(metaValue);
+}
+
 // ✅ Auth
 app.post("/api/auth/register", register);
 app.post("/api/auth/login", login);
@@ -59,8 +79,16 @@ app.get("/api/auth/google/client-id", (_req, res) => {
 
 app.post("/api/auth/google", googleLogin);
 
+// ✅ recuperación de contraseña
+app.post("/api/auth/forgot-password", forgotPassword);
+app.post("/api/auth/reset-password", resetPassword);
+
+// ✅ Si alguien abre la ruta en navegador
 app.get("/api/auth/google", (_req, res) => {
-  res.status(405).json({ ok: false, message: "Usa POST /api/auth/google con JSON: { credential }" });
+  res.status(405).json({
+    ok: false,
+    message: "Usa POST /api/auth/google con JSON: { credential }",
+  });
 });
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
@@ -259,25 +287,31 @@ app.post(
   requireRole(["admin", "worker"]),
   upload.single("image"),
   async (req, res) => {
-    const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    try {
+      const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+      const parsedMeta = parseMetaSafe(req.body.meta);
 
-    const created = await prisma.component.create({
-      data: {
-        type: req.body.type,
-        brand: req.body.brand,
-        model: req.body.model,
-        price: Number(req.body.price),
-        scoreGaming: Number(req.body.scoreGaming ?? 0),
-        scoreWork: Number(req.body.scoreWork ?? 0),
-        watt: req.body.watt ? Number(req.body.watt) : null,
-        meta: req.body.meta ? JSON.parse(req.body.meta) : undefined,
-        imageUrl,
-        stock: req.body.stock !== undefined ? Number(req.body.stock) : undefined,
-        status: req.body.status ?? undefined,
-      },
-    });
+      const created = await prisma.component.create({
+        data: {
+          type: req.body.type,
+          brand: req.body.brand,
+          model: req.body.model,
+          price: Number(req.body.price),
+          scoreGaming: Number(req.body.scoreGaming ?? 0),
+          scoreWork: Number(req.body.scoreWork ?? 0),
+          watt: req.body.watt ? Number(req.body.watt) : null,
+          meta: parsedMeta,
+          imageUrl,
+          stock: req.body.stock !== undefined ? Number(req.body.stock) : undefined,
+          status: req.body.status ?? undefined,
+        },
+      });
 
-    res.json(created);
+      res.json(created);
+    } catch (error) {
+      console.error("Error creando componente:", error);
+      res.status(400).json({ ok: false, message: "Datos inválidos para crear componente" });
+    }
   }
 );
 
@@ -296,6 +330,11 @@ app.put(
       const newImageUrl = req.file ? `/uploads/${req.file.filename}` : undefined;
       if (req.file) removeUploadByUrl(current.imageUrl);
 
+      let parsedMeta = current.meta;
+      if (req.body.meta !== undefined && req.body.meta !== "") {
+        parsedMeta = parseMetaSafe(req.body.meta);
+      }
+
       const updated = await prisma.component.update({
         where: { id },
         data: {
@@ -306,7 +345,7 @@ app.put(
           scoreGaming: req.body.scoreGaming !== undefined ? Number(req.body.scoreGaming) : current.scoreGaming,
           scoreWork: req.body.scoreWork !== undefined ? Number(req.body.scoreWork) : current.scoreWork,
           watt: req.body.watt !== undefined ? (req.body.watt === "" ? null : Number(req.body.watt)) : current.watt,
-          meta: req.body.meta ? JSON.parse(req.body.meta) : current.meta,
+          meta: parsedMeta,
           imageUrl: newImageUrl ?? current.imageUrl,
           stock: req.body.stock !== undefined ? Number(req.body.stock) : current.stock,
           status: req.body.status ?? current.status,
@@ -314,7 +353,8 @@ app.put(
       });
 
       res.json(updated);
-    } catch {
+    } catch (error) {
+      console.error("Error al actualizar componente:", error);
       res.status(500).json({ ok: false, message: "Error al actualizar" });
     }
   }

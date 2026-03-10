@@ -22,43 +22,43 @@ model Component {
   status      String   @default("active")
   createdAt   DateTime @default(now())
 
-  // ✅ relación inversa requerida por Prisma (OrderItem.component)
   orderItems OrderItem[]
-
-  // ✅ GALERÍA (NUEVO) 1 a muchos
-  images ComponentImage[]
+  images     ComponentImage[]
 }
 
 model ComponentImage {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   componentId String
   component   Component @relation(fields: [componentId], references: [id], onDelete: Cascade)
 
-  url       String   // /uploads/xxx.png
+  url       String
   createdAt DateTime @default(now())
 
   @@index([componentId])
 }
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  password  String
-  role      String   @default("user") // admin | worker | user
-  createdAt DateTime @default(now())
-  provider  String   @default("local") // "local" | "google"
-  googleId  String?  @unique
+  id               String    @id @default(cuid())
+  name             String
+  email            String    @unique
+  password         String
+  role             String    @default("user")
+  createdAt        DateTime  @default(now())
+  provider         String    @default("local")
+  googleId         String?   @unique
 
-  // ✅ PERFIL (nuevo)
-  nickname  String?
-  phone     String?
-  bio       String?
-  avatarUrl String?  // /uploads/xxx.png
+  nickname         String?
+  username         String?   @unique   // ← AÑADIR
+  phone            String?
+  bio              String?
+  avatarUrl        String?
+  receiveNews      Boolean   @default(false)  // ← AÑADIR
+
+  // recuperación de contraseña
+  resetToken       String?
+  resetTokenExpiry DateTime?
 
   builds Build[]
-
-  // ✅ relación inversa requerida por Prisma (Order.user)
   orders Order[]
 }
 
@@ -101,8 +101,7 @@ model Order {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  items OrderItem[]
-
+  items   OrderItem[]
   payment Payment?
 }
 

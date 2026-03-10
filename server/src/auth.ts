@@ -4,17 +4,21 @@ import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { OAuth2Client } from "google-auth-library";
+import nodemailer from "nodemailer";
+import crypto from "crypto";
 
 const prisma = new PrismaClient();
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret";
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
+const MAIL_USER = process.env.MAIL_USER || "";
+const MAIL_APP_PASSWORD = process.env.MAIL_APP_PASSWORD || "";
+const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
 
 function signToken(payload: { id: string; role: string }) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
 }
 
-// ✅ Select único para devolver siempre el mismo shape de user
 const USER_SELECT = {
   id: true,
   name: true,
@@ -26,123 +30,412 @@ const USER_SELECT = {
   avatarUrl: true,
 } as const;
 
-// -------------------
-// REGISTER / LOGIN
-// -------------------
+const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
+
+const transporter =
+  MAIL_USER && MAIL_APP_PASSWORD
+    ? nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: MAIL_USER,
+          pass: MAIL_APP_PASSWORD,
+        },
+      })
+    : null;
+
+function hashResetToken(token: string) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+// =====================
+// REGISTER
+// =====================
 const RegisterSchema = z.object({
-  name: z.string().min(2),
-  email: z.string().email(),
-  password: z.string().min(6),
+  name: z.string().min(2, "El nombre es obligatorio"),
+  email: z.string().email("Correo inválido"),
+  password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
 });
 
 export async function register(req: Request, res: Response) {
-  const parsed = RegisterSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ ok: false, errors: parsed.error.flatten() });
+  try {
+    const parsed = RegisterSchema.safeParse(req.body);
 
-  const { name, email, password } = parsed.data;
+    if (!parsed.success) {
+      return res.status(400).json({
+        ok: false,
+        errors: parsed.error.flatten(),
+      });
+    }
 
-  const exists = await prisma.user.findUnique({ where: { email } });
-  if (exists) return res.status(400).json({ ok: false, message: "El email ya existe" });
+    const { name, email, password } = parsed.data;
 
-  const hash = await bcrypt.hash(password, 10);
+    const exists = await prisma.user.findUnique({
+      where: { email },
+    });
 
-  const user = await prisma.user.create({
-    data: { name, email, password: hash, role: "user" },
-    select: USER_SELECT,
-  });
+    if (exists) {
+      return res.status(400).json({
+        ok: false,
+        message: "El email ya existe",
+      });
+    }
 
-  const token = signToken({ id: user.id, role: user.role });
-  return res.json({ ok: true, user, token });
+    const hash = await bcrypt.hash(password, 10);
+
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hash,
+        role: "user",
+        provider: "local",
+      },
+      select: USER_SELECT,
+    });
+
+    const token = signToken({
+      id: user.id,
+      role: user.role,
+    });
+
+    return res.json({
+      ok: true,
+      user,
+      token,
+    });
+  } catch (error) {
+    console.error("Error en register:", error);
+    return res.status(500).json({
+      ok: false,
+      message: "Error interno del servidor",
+    });
+  }
 }
 
+// =====================
+// LOGIN
+// =====================
 const LoginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  email: z.string().email("Correo inválido"),
+  password: z.string().min(1, "La contraseña es obligatoria"),
 });
 
 export async function login(req: Request, res: Response) {
-  const parsed = LoginSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ ok: false, errors: parsed.error.flatten() });
+  try {
+    const parsed = LoginSchema.safeParse(req.body);
 
-  const { email, password } = parsed.data;
+    if (!parsed.success) {
+      return res.status(400).json({
+        ok: false,
+        errors: parsed.error.flatten(),
+      });
+    }
 
-  // ✅ Traemos el usuario con password para validar, pero devolvemos el SELECT pro
-  const userDb = await prisma.user.findUnique({
-    where: { email },
-    select: { ...USER_SELECT, password: true },
-  });
+    const { email, password } = parsed.data;
 
-  if (!userDb) return res.status(400).json({ ok: false, message: "Credenciales inválidas" });
+    const userDb = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        ...USER_SELECT,
+        password: true,
+      },
+    });
 
-  const ok = await bcrypt.compare(password, userDb.password);
-  if (!ok) return res.status(400).json({ ok: false, message: "Credenciales inválidas" });
+    if (!userDb) {
+      return res.status(400).json({
+        ok: false,
+        message: "Credenciales inválidas",
+      });
+    }
 
-  // ✅ Quitamos password del response
-  const { password: _pw, ...user } = userDb;
+    const okPassword = await bcrypt.compare(password, userDb.password);
 
-  const token = signToken({ id: user.id, role: user.role });
-  return res.json({ ok: true, user, token });
+    if (!okPassword) {
+      return res.status(400).json({
+        ok: false,
+        message: "Credenciales inválidas",
+      });
+    }
+
+    const { password: _pw, ...user } = userDb;
+
+    const token = signToken({
+      id: user.id,
+      role: user.role,
+    });
+
+    return res.json({
+      ok: true,
+      user,
+      token,
+    });
+  } catch (error) {
+    console.error("Error en login:", error);
+    return res.status(500).json({
+      ok: false,
+      message: "Error interno del servidor",
+    });
+  }
 }
 
-// -------------------
+// =====================
+// FORGOT PASSWORD
+// =====================
+const ForgotPasswordSchema = z.object({
+  email: z.string().email("Correo inválido"),
+});
+
+export async function forgotPassword(req: Request, res: Response) {
+  try {
+    const parsed = ForgotPasswordSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        ok: false,
+        errors: parsed.error.flatten(),
+      });
+    }
+
+    const { email } = parsed.data;
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    // Siempre responder lo mismo por seguridad
+    if (!user) {
+      return res.json({
+        ok: true,
+        message: "Si el correo existe, se enviaron instrucciones para recuperar la contraseña",
+      });
+    }
+
+    if (!transporter) {
+      return res.status(500).json({
+        ok: false,
+        message: "Falta configurar MAIL_USER o MAIL_APP_PASSWORD en el .env",
+      });
+    }
+
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const hashedToken = hashResetToken(rawToken);
+    const expiry = new Date(Date.now() + 1000 * 60 * 30); // 30 min
+
+    await prisma.user.update({
+      where: { email },
+      data: {
+        resetToken: hashedToken,
+        resetTokenExpiry: expiry,
+      },
+    });
+
+    const resetUrl = `${CLIENT_URL}/reset-password?token=${rawToken}`;
+
+    await transporter.sendMail({
+      from: `"Diamond Grid" <${MAIL_USER}>`,
+      to: email,
+      subject: "Recuperación de contraseña - Diamond Grid",
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111;">
+          <h2>Recuperación de contraseña</h2>
+          <p>Hola ${user.name},</p>
+          <p>Recibimos una solicitud para restablecer tu contraseña en <b>Diamond Grid</b>.</p>
+          <p>Haz clic en el siguiente botón para crear una nueva contraseña:</p>
+          <p style="margin: 24px 0;">
+            <a
+              href="${resetUrl}"
+              style="background:#111827;color:#fff;padding:12px 20px;text-decoration:none;border-radius:8px;display:inline-block;"
+            >
+              Restablecer contraseña
+            </a>
+          </p>
+          <p>También puedes copiar y pegar este enlace en tu navegador:</p>
+          <p>${resetUrl}</p>
+          <p>Este enlace vencerá en 30 minutos.</p>
+          <p>Si no solicitaste este cambio, puedes ignorar este correo.</p>
+        </div>
+      `,
+    });
+
+    return res.json({
+      ok: true,
+      message: "Si el correo existe, se enviaron instrucciones para recuperar la contraseña",
+    });
+  } catch (error) {
+    console.error("Error en forgotPassword:", error);
+    return res.status(500).json({
+      ok: false,
+      message: "Error interno del servidor",
+    });
+  }
+}
+
+// =====================
+// RESET PASSWORD
+// =====================
+const ResetPasswordSchema = z.object({
+  token: z.string().min(10, "Token inválido"),
+  newPassword: z.string().min(6, "La nueva contraseña debe tener al menos 6 caracteres"),
+});
+
+export async function resetPassword(req: Request, res: Response) {
+  try {
+    const parsed = ResetPasswordSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        ok: false,
+        errors: parsed.error.flatten(),
+      });
+    }
+
+    const { token, newPassword } = parsed.data;
+    const hashedToken = hashResetToken(token);
+
+    const user = await prisma.user.findFirst({
+      where: {
+        resetToken: hashedToken,
+        resetTokenExpiry: {
+          gt: new Date(),
+        },
+      },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        ok: false,
+        message: "El enlace de recuperación es inválido o ya expiró",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetToken: null,
+        resetTokenExpiry: null,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      message: "Contraseña restablecida correctamente",
+    });
+  } catch (error) {
+    console.error("Error en resetPassword:", error);
+    return res.status(500).json({
+      ok: false,
+      message: "Error interno del servidor",
+    });
+  }
+}
+
+// =====================
 // AUTH MIDDLEWARE
-// -------------------
+// =====================
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   const h = req.headers.authorization;
-  if (!h?.startsWith("Bearer ")) return res.status(401).json({ ok: false, message: "No autorizado" });
+
+  if (!h?.startsWith("Bearer ")) {
+    return res.status(401).json({
+      ok: false,
+      message: "No autorizado",
+    });
+  }
 
   const token = h.slice("Bearer ".length);
+
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    (req as any).user = { id: decoded.id, role: decoded.role };
+    const decoded = jwt.verify(token, JWT_SECRET) as {
+      id: string;
+      role: string;
+    };
+
+    (req as any).user = {
+      id: decoded.id,
+      role: decoded.role,
+    };
+
     next();
   } catch {
-    return res.status(401).json({ ok: false, message: "Token inválido" });
+    return res.status(401).json({
+      ok: false,
+      message: "Token inválido",
+    });
   }
 }
 
 export function requireRole(roles: Array<"admin" | "worker" | "user">) {
   return (req: Request, res: Response, next: NextFunction) => {
     const u = (req as any).user;
-    if (!u?.role) return res.status(401).json({ ok: false, message: "No autorizado" });
-    if (!roles.includes(u.role)) return res.status(403).json({ ok: false, message: "Sin permiso" });
+
+    if (!u?.role) {
+      return res.status(401).json({
+        ok: false,
+        message: "No autorizado",
+      });
+    }
+
+    if (!roles.includes(u.role)) {
+      return res.status(403).json({
+        ok: false,
+        message: "Sin permiso",
+      });
+    }
+
     next();
   };
 }
 
-// -------------------
+// =====================
 // GOOGLE LOGIN
-// -------------------
+// =====================
 const GoogleSchema = z.object({
   credential: z.string().min(10),
 });
 
-const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
-
 export async function googleLogin(req: Request, res: Response) {
-  if (!GOOGLE_CLIENT_ID) {
-    return res.status(500).json({ ok: false, message: "Falta GOOGLE_CLIENT_ID en .env del server" });
-  }
-
-  const parsed = GoogleSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ ok: false, message: "Falta credential" });
-  }
-
   try {
+    if (!GOOGLE_CLIENT_ID) {
+      return res.status(500).json({
+        ok: false,
+        message: "Falta GOOGLE_CLIENT_ID en .env del server",
+      });
+    }
+
+    const parsed = GoogleSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        ok: false,
+        message: "Falta credential",
+      });
+    }
+
     const ticket = await googleClient.verifyIdToken({
       idToken: parsed.data.credential,
       audience: GOOGLE_CLIENT_ID,
     });
 
     const payload = ticket.getPayload();
-    if (!payload?.email) return res.status(400).json({ ok: false, message: "No se pudo leer email de Google" });
+
+    if (!payload?.email) {
+      return res.status(400).json({
+        ok: false,
+        message: "No se pudo leer email de Google",
+      });
+    }
 
     const email = payload.email;
     const name = payload.name || email.split("@")[0];
+    const googleId = payload.sub;
 
-    // Si no existe, lo creamos. Como tu schema exige password, guardamos uno random hasheado.
-    const existing = await prisma.user.findUnique({ where: { email }, select: USER_SELECT });
+    const existing = await prisma.user.findUnique({
+      where: { email },
+      select: USER_SELECT,
+    });
 
     const user =
       existing ??
@@ -151,14 +444,28 @@ export async function googleLogin(req: Request, res: Response) {
           email,
           name,
           role: "user",
+          provider: "google",
+          googleId,
           password: await bcrypt.hash(`google_${Date.now()}_${Math.random()}`, 10),
         },
         select: USER_SELECT,
       }));
 
-    const token = signToken({ id: user.id, role: user.role });
-    return res.json({ ok: true, user, token });
-  } catch {
-    return res.status(401).json({ ok: false, message: "Google credential inválida" });
+    const token = signToken({
+      id: user.id,
+      role: user.role,
+    });
+
+    return res.json({
+      ok: true,
+      user,
+      token,
+    });
+  } catch (error) {
+    console.error("Error en googleLogin:", error);
+    return res.status(401).json({
+      ok: false,
+      message: "Google credential inválida",
+    });
   }
 }

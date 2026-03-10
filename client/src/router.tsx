@@ -2,11 +2,14 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
+import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { AdminDashboard } from "./pages/dash/AdminDashboard";
 import { WorkerDashboard } from "./pages/dash/WorkerDashboard";
 import { Protected } from "./pages/Protected";
 import { ComponentPage } from "./pages/ComponentPage";
 import { CheckoutPage } from "./pages/CheckoutPage";
+import { CartPage } from "./pages/CartPage";
 import ProfilePage from "./pages/ProfilePage";
 
 import { AboutPage } from "./pages/AboutPage";
@@ -30,6 +33,10 @@ export default function AppRouter() {
 
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+      <Route path="/cart" element={<CartPage />} />
 
       <Route
         path="/admin"

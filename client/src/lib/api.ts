@@ -261,3 +261,23 @@ export async function updateAdminOrderStatus(
   });
   return r.json();
 }
+// =====================
+// PASSWORD RESET
+// =====================
+export async function forgotPassword(email: string) {
+  const r = await fetch(`${API}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  return r.json();
+}
+
+export async function resetPassword(token: string, password: string) {
+  const r = await fetch(`${API}/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, password }),
+  });
+  return r.json();
+}
