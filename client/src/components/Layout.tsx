@@ -39,7 +39,6 @@ export function Layout({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) return;
     const p = location.pathname;
-    const isAuthPage = p === "/login" || p === "/register";
     if (!isAuthPage) return;
     if (user.role === "admin") nav("/admin", { replace: true });
     else if (user.role === "worker") nav("/worker", { replace: true });
@@ -198,14 +197,17 @@ export function Layout({ children }: { children: ReactNode }) {
           flex-shrink: 0;
         }
 
-        .lyt-logo img {
-          height: 44px;
-          width: auto;
-          object-fit: contain;
-          filter: drop-shadow(0 0 10px rgba(34,211,238,0.3));
-          transition: filter 0.2s;
-        }
-        .lyt-logo:hover img { filter: drop-shadow(0 0 16px rgba(34,211,238,0.5)); }
+.lyt-logo img {
+  height: 86px;
+  width: auto;
+  object-fit: contain;
+  filter: brightness(1.4) drop-shadow(0 0 16px rgba(34,211,238,0.6));
+  transition: filter 0.2s, transform 0.2s;
+}
+.lyt-logo:hover img {
+  filter: brightness(1.6) drop-shadow(0 0 24px rgba(34,211,238,0.85));
+  transform: scale(1.04);
+}
 
         /* Search */
         .lyt-search {
