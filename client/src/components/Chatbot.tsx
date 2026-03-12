@@ -325,7 +325,7 @@ export function Chatbot() {
           position: fixed;
           bottom: 24px;
           right: 24px;
-          z-index: 9999;
+          z-index: 99999;
         }
 
         .cb-toggle-btn {
@@ -380,7 +380,7 @@ export function Chatbot() {
           position: fixed;
           bottom: 92px;
           right: 24px;
-          z-index: 9998;
+          z-index: 99998;
           width: 400px;
           max-width: calc(100vw - 32px);
           border-radius: 24px;

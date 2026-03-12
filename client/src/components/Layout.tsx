@@ -36,9 +36,11 @@ export function Layout({ children }: { children: ReactNode }) {
     cart.clear();
   }, [isStaff]);
 
+  // ✅ CORRECTO
   useEffect(() => {
     if (!user) return;
     const p = location.pathname;
+    const isAuthPage = p === "/login" || p === "/register";
     if (!isAuthPage) return;
     if (user.role === "admin") nav("/admin", { replace: true });
     else if (user.role === "worker") nav("/worker", { replace: true });
@@ -604,7 +606,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <div className="lyt-topbar-links">
             <Link to="/about" className="lyt-topbar-link">Preguntas frecuentes</Link>
             <Link to="/contact" className="lyt-topbar-link">Contacto</Link>
-            <Link to="/profile" className="lyt-topbar-link">Trackeo de pedidos</Link>
+
           </div>
           <div className="lyt-topbar-badge">
             Los mejores precios del mercado
@@ -738,7 +740,6 @@ export function Layout({ children }: { children: ReactNode }) {
           <div className="lyt-drawer-divider" />
           <Link to="/about" className="lyt-drawer-link">Preguntas frecuentes</Link>
           <Link to="/contact" className="lyt-drawer-link">Contacto</Link>
-          <Link to="/profile" className="lyt-drawer-link">Trackeo de pedidos</Link>
 
           {!user ? (
             <>
