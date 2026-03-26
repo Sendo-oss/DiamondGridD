@@ -131,8 +131,9 @@ export function HomePage() {
   const s = SLIDES[slide];
 
   return (
-    <Layout>
-      <style>{`
+    <>
+      <Layout>
+        <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap');
 
         .hp { font-family: 'Inter', sans-serif; color: #fff; }
@@ -863,7 +864,7 @@ export function HomePage() {
         }
         .hp-brand-logo img { max-height: 38px; width: auto; object-fit: contain; opacity: 0.85; }
         .hp-brand-logo:hover img { opacity: 1; }
-      `}</style>
+        `}</style>
 
       <div className="hp">
 
@@ -1106,7 +1107,8 @@ export function HomePage() {
 
       </div>
 
+      </Layout>
       <Chatbot />
-    </Layout>
+    </>
   );
 }

@@ -98,8 +98,8 @@ const CONTACT_ITEMS = [
   {
     icon: <MapIcon />,
     label: "Ubicación",
-    value: "Ecuador",
-    desc: "Operamos con atención en línea y gestión de pedidos.",
+    value: "Frente a la parada El Florón",
+    desc: "Av. 10 de Agosto 34-97 y, Quito 170508",
     color: "rgba(196,181,253,0.9)",
     bg: "rgba(139,92,246,0.07)",
     border: "rgba(139,92,246,0.15)",
@@ -384,6 +384,68 @@ export function ContactPage() {
           margin-top: 5px;
           font-family: 'JetBrains Mono', monospace;
         }
+
+        .ct-map-wrap {
+          padding: 0 20px 20px;
+        }
+
+        .ct-map-card {
+          border-radius: 18px;
+          border: 1px solid rgba(255,255,255,0.07);
+          background: rgba(255,255,255,0.03);
+          overflow: hidden;
+        }
+
+        .ct-map-top {
+          padding: 16px 18px;
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .ct-map-title {
+          font-size: 13px;
+          font-weight: 700;
+          color: rgba(255,255,255,0.9);
+        }
+
+        .ct-map-text {
+          font-size: 12px;
+          color: rgba(255,255,255,0.42);
+          line-height: 1.6;
+          margin-top: 4px;
+        }
+
+        .ct-map-actions {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+          margin-top: 12px;
+        }
+
+        .ct-map-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          border-radius: 12px;
+          padding: 10px 14px;
+          border: 1px solid rgba(139,92,246,0.18);
+          background: rgba(139,92,246,0.08);
+          color: rgba(216,180,254,0.92);
+          text-decoration: none;
+          font-size: 12.5px;
+          font-weight: 600;
+        }
+
+        .ct-map-btn:hover {
+          background: rgba(139,92,246,0.14);
+        }
+
+        .ct-map-frame {
+          width: 100%;
+          height: 280px;
+          border: 0;
+          display: block;
+          filter: grayscale(0.08) contrast(1.02);
+        }
       `}</style>
 
       <div className="ct">
@@ -428,6 +490,33 @@ export function ContactPage() {
                   </div>
                 </div>
               ))}
+            </div>
+            <div className="ct-map-wrap">
+              <div className="ct-map-card">
+                <div className="ct-map-top">
+                  <div className="ct-map-title">Como llegar</div>
+                  <div className="ct-map-text">
+                    Estamos frente a la parada El Florón, en Av. 10 de Agosto 34-97 y, Quito 170508.
+                  </div>
+                  <div className="ct-map-actions">
+                    <a
+                      className="ct-map-btn"
+                      href="https://www.google.com/maps/search/?api=1&query=Frente%20a%20la%20parada%20El%20Flor%C3%B3n%2C%20Av.%2010%20de%20Agosto%2034-97%20y%2C%20Quito%20170508"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <MapIcon /> Abrir en Google Maps
+                    </a>
+                  </div>
+                </div>
+                <iframe
+                  className="ct-map-frame"
+                  title="Ubicacion Diamond Grid"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  src="https://www.google.com/maps?q=Frente%20a%20la%20parada%20El%20Flor%C3%B3n%2C%20Av.%2010%20de%20Agosto%2034-97%20y%2C%20Quito%20170508&output=embed"
+                />
+              </div>
             </div>
           </div>
 

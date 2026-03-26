@@ -297,9 +297,6 @@ app.post(
           brand: req.body.brand,
           model: req.body.model,
           price: Number(req.body.price),
-          scoreGaming: Number(req.body.scoreGaming ?? 0),
-          scoreWork: Number(req.body.scoreWork ?? 0),
-          watt: req.body.watt ? Number(req.body.watt) : null,
           meta: parsedMeta,
           imageUrl,
           stock: req.body.stock !== undefined ? Number(req.body.stock) : undefined,
@@ -342,9 +339,6 @@ app.put(
           brand: req.body.brand ?? current.brand,
           model: req.body.model ?? current.model,
           price: req.body.price !== undefined ? Number(req.body.price) : current.price,
-          scoreGaming: req.body.scoreGaming !== undefined ? Number(req.body.scoreGaming) : current.scoreGaming,
-          scoreWork: req.body.scoreWork !== undefined ? Number(req.body.scoreWork) : current.scoreWork,
-          watt: req.body.watt !== undefined ? (req.body.watt === "" ? null : Number(req.body.watt)) : current.watt,
           meta: parsedMeta,
           imageUrl: newImageUrl ?? current.imageUrl,
           stock: req.body.stock !== undefined ? Number(req.body.stock) : current.stock,
@@ -706,13 +700,13 @@ app.post("/api/seed", async (_req, res) => {
 
   await prisma.component.createMany({
     data: [
-      { type: "CPU", brand: "AMD", model: "Ryzen 5 5600", price: 145, scoreGaming: 75, scoreWork: 70, watt: 65, meta: { socket: "AM4" }, stock: 5, status: "active" },
-      { type: "CPU", brand: "Intel", model: "Core i5-12400F", price: 165, scoreGaming: 78, scoreWork: 72, watt: 65, meta: { socket: "LGA1700" }, stock: 5, status: "active" },
-      { type: "GPU", brand: "NVIDIA", model: "RTX 4060", price: 320, scoreGaming: 85, scoreWork: 70, watt: 115, meta: { vram: "8GB" }, stock: 3, status: "active" },
-      { type: "GPU", brand: "AMD", model: "RX 7600", price: 280, scoreGaming: 82, scoreWork: 65, watt: 165, meta: { vram: "8GB" }, stock: 3, status: "active" },
-      { type: "RAM", brand: "Corsair", model: "16GB DDR4 3200", price: 45, scoreGaming: 40, scoreWork: 40, meta: { gb: 16, ddr: "DDR4" }, stock: 20, status: "active" },
-      { type: "SSD", brand: "Kingston", model: "NVMe 1TB", price: 60, scoreGaming: 30, scoreWork: 45, meta: { gb: 1000, kind: "NVMe" }, stock: 15, status: "active" },
-      { type: "PSU", brand: "EVGA", model: "650W Bronze", price: 70, scoreGaming: 20, scoreWork: 20, watt: 650, stock: 10, status: "active" },
+      { type: "CPU", brand: "AMD", model: "Ryzen 5 5600", price: 145, meta: { socket: "AM4" }, stock: 5, status: "active" },
+      { type: "CPU", brand: "Intel", model: "Core i5-12400F", price: 165, meta: { socket: "LGA1700" }, stock: 5, status: "active" },
+      { type: "GPU", brand: "NVIDIA", model: "RTX 4060", price: 320, meta: { vram: "8GB" }, stock: 3, status: "active" },
+      { type: "GPU", brand: "AMD", model: "RX 7600", price: 280, meta: { vram: "8GB" }, stock: 3, status: "active" },
+      { type: "RAM", brand: "Corsair", model: "16GB DDR4 3200", price: 45, meta: { gb: 16, ddr: "DDR4" }, stock: 20, status: "active" },
+      { type: "SSD", brand: "Kingston", model: "NVMe 1TB", price: 60, meta: { gb: 1000, kind: "NVMe" }, stock: 15, status: "active" },
+      { type: "PSU", brand: "EVGA", model: "650W Bronze", price: 70, stock: 10, status: "active" },
     ],
   });
 
@@ -728,19 +722,24 @@ const RecommendSchema = z.object({
   preference: z.enum(["balanced", "performance", "cheap"]).default("balanced"),
 });
 
-function pickBest(items: any[], key: "scoreGaming" | "scoreWork", budget: number) {
-  const scored = items
-    .filter((x) => x.price <= budget)
-    .map((x) => ({ ...x, value: (x[key] || 0) * 1.2 - x.price * 0.3 }))
-    .sort((a, b) => b.value - a.value);
-  return scored[0] ?? null;
+function pickBest(items: any[], budget: number, mode: "closest" | "cheapest" | "balanced") {
+  const inBudget = items
+    .filter((x) => Number(x.price) <= budget)
+    .sort((a, b) => Number(a.price) - Number(b.price));
+
+  if (!inBudget.length) return null;
+  if (mode === "cheapest") return inBudget[0];
+  if (mode === "closest") return inBudget[inBudget.length - 1];
+
+  const target = budget * 0.82;
+  return [...inBudget].sort((a, b) => Math.abs(Number(a.price) - target) - Math.abs(Number(b.price) - target))[0] ?? inBudget[0];
 }
 
 app.post("/api/recommend", async (req, res) => {
   const parsed = RecommendSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ ok: false, errors: parsed.error.flatten() });
 
-  const { budget, purpose } = parsed.data;
+  const { budget, purpose, preference } = parsed.data;
 
   const split =
     purpose === "gaming"
@@ -755,13 +754,18 @@ app.post("/api/recommend", async (req, res) => {
     prisma.component.findMany({ where: { type: "PSU", status: "active" } }),
   ]);
 
-  const key = purpose === "gaming" ? "scoreGaming" : "scoreWork";
+  const mode =
+    preference === "cheap"
+      ? "cheapest"
+      : purpose === "gaming" || preference === "performance"
+        ? "closest"
+        : "balanced";
 
-  const cpu = pickBest(cpus, key, budget * split.cpu);
-  const gpu = pickBest(gpus, key, budget * split.gpu);
-  const ram = pickBest(rams, key, budget * split.ram);
-  const ssd = pickBest(ssds, key, budget * split.ssd);
-  const psu = pickBest(psus, key, budget * split.psu);
+  const cpu = pickBest(cpus, budget * split.cpu, mode);
+  const gpu = pickBest(gpus, budget * split.gpu, mode);
+  const ram = pickBest(rams, budget * split.ram, preference === "cheap" ? "cheapest" : "balanced");
+  const ssd = pickBest(ssds, budget * split.ssd, preference === "performance" ? "closest" : "balanced");
+  const psu = pickBest(psus, budget * split.psu, "balanced");
 
   const parts = { cpu, gpu, ram, ssd, psu };
   const total = Object.values(parts).reduce((sum, p: any) => sum + (p?.price ?? 0), 0);

@@ -1,5 +1,4 @@
 import { Layout } from "./components/Layout";
-import { Chatbot } from "./components/Chatbot";
 
 export default function App() {
   return (
@@ -52,8 +51,6 @@ export default function App() {
           </div>
         </div>
       </section>
-
-      <Chatbot />
     </Layout>
   );
 }

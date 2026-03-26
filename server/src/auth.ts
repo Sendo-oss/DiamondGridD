@@ -1,4 +1,4 @@
-import type { Request, Response, NextFunction } from "express";
+import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
@@ -47,13 +47,20 @@ function hashResetToken(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-// =====================
-// REGISTER
-// =====================
+const PasswordSchema = z
+  .string()
+  .min(8, "La contrasena debe tener al menos 8 caracteres")
+  .regex(/[A-Z]/, "La contrasena debe incluir una letra mayuscula")
+  .regex(/[0-9]/, "La contrasena debe incluir un numero")
+  .regex(/[^A-Za-z0-9]/, "La contrasena debe incluir un simbolo especial");
+
 const RegisterSchema = z.object({
   name: z.string().min(2, "El nombre es obligatorio"),
-  email: z.string().email("Correo inválido"),
-  password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
+  username: z.string().min(3, "El nombre de usuario debe tener al menos 3 caracteres").max(30).optional(),
+  email: z.string().email("Correo invalido"),
+  phone: z.string().min(7, "El telefono debe tener al menos 7 caracteres").max(20).optional(),
+  password: PasswordSchema,
+  receiveNews: z.boolean().optional(),
 });
 
 export async function register(req: Request, res: Response) {
@@ -67,7 +74,7 @@ export async function register(req: Request, res: Response) {
       });
     }
 
-    const { name, email, password } = parsed.data;
+    const { name, username, email, phone, password, receiveNews } = parsed.data;
 
     const exists = await prisma.user.findUnique({
       where: { email },
@@ -80,15 +87,31 @@ export async function register(req: Request, res: Response) {
       });
     }
 
+    if (username) {
+      const usernameExists = await prisma.user.findUnique({
+        where: { username },
+      });
+
+      if (usernameExists) {
+        return res.status(400).json({
+          ok: false,
+          message: "El nombre de usuario ya existe",
+        });
+      }
+    }
+
     const hash = await bcrypt.hash(password, 10);
 
     const user = await prisma.user.create({
       data: {
         name,
+        username: username || null,
         email,
+        phone: phone || null,
         password: hash,
         role: "user",
         provider: "local",
+        receiveNews: Boolean(receiveNews),
       },
       select: USER_SELECT,
     });
@@ -112,12 +135,9 @@ export async function register(req: Request, res: Response) {
   }
 }
 
-// =====================
-// LOGIN
-// =====================
 const LoginSchema = z.object({
-  email: z.string().email("Correo inválido"),
-  password: z.string().min(1, "La contraseña es obligatoria"),
+  email: z.string().email("Correo invalido"),
+  password: z.string().min(1, "La contrasena es obligatoria"),
 });
 
 export async function login(req: Request, res: Response) {
@@ -144,7 +164,7 @@ export async function login(req: Request, res: Response) {
     if (!userDb) {
       return res.status(400).json({
         ok: false,
-        message: "Credenciales inválidas",
+        message: "Credenciales invalidas",
       });
     }
 
@@ -153,7 +173,7 @@ export async function login(req: Request, res: Response) {
     if (!okPassword) {
       return res.status(400).json({
         ok: false,
-        message: "Credenciales inválidas",
+        message: "Credenciales invalidas",
       });
     }
 
@@ -178,11 +198,8 @@ export async function login(req: Request, res: Response) {
   }
 }
 
-// =====================
-// FORGOT PASSWORD
-// =====================
 const ForgotPasswordSchema = z.object({
-  email: z.string().email("Correo inválido"),
+  email: z.string().email("Correo invalido"),
 });
 
 export async function forgotPassword(req: Request, res: Response) {
@@ -202,11 +219,10 @@ export async function forgotPassword(req: Request, res: Response) {
       where: { email },
     });
 
-    // Siempre responder lo mismo por seguridad
     if (!user) {
       return res.json({
         ok: true,
-        message: "Si el correo existe, se enviaron instrucciones para recuperar la contraseña",
+        message: "Si el correo existe, se enviaron instrucciones para recuperar la contrasena",
       });
     }
 
@@ -219,7 +235,7 @@ export async function forgotPassword(req: Request, res: Response) {
 
     const rawToken = crypto.randomBytes(32).toString("hex");
     const hashedToken = hashResetToken(rawToken);
-    const expiry = new Date(Date.now() + 1000 * 60 * 30); // 30 min
+    const expiry = new Date(Date.now() + 1000 * 60 * 30);
 
     await prisma.user.update({
       where: { email },
@@ -234,24 +250,24 @@ export async function forgotPassword(req: Request, res: Response) {
     await transporter.sendMail({
       from: `"Diamond Grid" <${MAIL_USER}>`,
       to: email,
-      subject: "Recuperación de contraseña - Diamond Grid",
+      subject: "Recuperacion de contrasena - Diamond Grid",
       html: `
         <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111;">
-          <h2>Recuperación de contraseña</h2>
+          <h2>Recuperacion de contrasena</h2>
           <p>Hola ${user.name},</p>
-          <p>Recibimos una solicitud para restablecer tu contraseña en <b>Diamond Grid</b>.</p>
-          <p>Haz clic en el siguiente botón para crear una nueva contraseña:</p>
+          <p>Recibimos una solicitud para restablecer tu contrasena en <b>Diamond Grid</b>.</p>
+          <p>Haz clic en el siguiente boton para crear una nueva contrasena:</p>
           <p style="margin: 24px 0;">
             <a
               href="${resetUrl}"
               style="background:#111827;color:#fff;padding:12px 20px;text-decoration:none;border-radius:8px;display:inline-block;"
             >
-              Restablecer contraseña
+              Restablecer contrasena
             </a>
           </p>
-          <p>También puedes copiar y pegar este enlace en tu navegador:</p>
+          <p>Tambien puedes copiar y pegar este enlace en tu navegador:</p>
           <p>${resetUrl}</p>
-          <p>Este enlace vencerá en 30 minutos.</p>
+          <p>Este enlace vencera en 30 minutos.</p>
           <p>Si no solicitaste este cambio, puedes ignorar este correo.</p>
         </div>
       `,
@@ -259,7 +275,7 @@ export async function forgotPassword(req: Request, res: Response) {
 
     return res.json({
       ok: true,
-      message: "Si el correo existe, se enviaron instrucciones para recuperar la contraseña",
+      message: "Si el correo existe, se enviaron instrucciones para recuperar la contrasena",
     });
   } catch (error) {
     console.error("Error en forgotPassword:", error);
@@ -270,12 +286,9 @@ export async function forgotPassword(req: Request, res: Response) {
   }
 }
 
-// =====================
-// RESET PASSWORD
-// =====================
 const ResetPasswordSchema = z.object({
-  token: z.string().min(10, "Token inválido"),
-  newPassword: z.string().min(6, "La nueva contraseña debe tener al menos 6 caracteres"),
+  token: z.string().min(10, "Token invalido"),
+  newPassword: PasswordSchema,
 });
 
 export async function resetPassword(req: Request, res: Response) {
@@ -304,7 +317,7 @@ export async function resetPassword(req: Request, res: Response) {
     if (!user) {
       return res.status(400).json({
         ok: false,
-        message: "El enlace de recuperación es inválido o ya expiró",
+        message: "El enlace de recuperacion es invalido o ya expiro",
       });
     }
 
@@ -321,7 +334,7 @@ export async function resetPassword(req: Request, res: Response) {
 
     return res.json({
       ok: true,
-      message: "Contraseña restablecida correctamente",
+      message: "Contrasena restablecida correctamente",
     });
   } catch (error) {
     console.error("Error en resetPassword:", error);
@@ -332,9 +345,6 @@ export async function resetPassword(req: Request, res: Response) {
   }
 }
 
-// =====================
-// AUTH MIDDLEWARE
-// =====================
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   const h = req.headers.authorization;
 
@@ -362,7 +372,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   } catch {
     return res.status(401).json({
       ok: false,
-      message: "Token inválido",
+      message: "Token invalido",
     });
   }
 }
@@ -389,9 +399,6 @@ export function requireRole(roles: Array<"admin" | "worker" | "user">) {
   };
 }
 
-// =====================
-// GOOGLE LOGIN
-// =====================
 const GoogleSchema = z.object({
   credential: z.string().min(10),
 });
@@ -465,7 +472,7 @@ export async function googleLogin(req: Request, res: Response) {
     console.error("Error en googleLogin:", error);
     return res.status(401).json({
       ok: false,
-      message: "Google credential inválida",
+      message: "Google credential invalida",
     });
   }
 }

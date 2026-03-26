@@ -13,9 +13,6 @@ model Component {
   brand       String
   model       String
   price       Float
-  scoreGaming Int      @default(0)
-  scoreWork   Int      @default(0)
-  watt        Int?
   meta        Json?
   imageUrl    String?
   stock       Int      @default(0)

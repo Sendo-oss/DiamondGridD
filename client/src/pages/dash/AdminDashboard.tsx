@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Layout } from "../../components/Layout";
+import { useNavigate } from "react-router-dom";
 import {
   fetchComponents,
   createComponent,
@@ -14,6 +15,9 @@ import {
   fetchAdminOrders,
   updateAdminOrderStatus,
 } from "../../lib/api";
+import { downloadCatalogPdf, openInvoiceWindow } from "../../lib/invoice";
+import { useAuth } from "../../app/auth";
+import { DashboardSidebar } from "../../components/DashboardSidebar";
 
 const TYPES = ["CPU", "GPU", "RAM", "SSD", "PSU", "MOBO", "CASE"] as const;
 type Status = "active" | "inactive";
@@ -25,9 +29,6 @@ type FormState = {
   brand: string;
   model: string;
   price: number;
-  scoreGaming: number;
-  scoreWork: number;
-  watt?: number | null;
   stock: number;
   status: Status;
   metaText: string;
@@ -38,7 +39,6 @@ type FormState = {
 
 const emptyForm: FormState = {
   type: "CPU", brand: "", model: "", price: 0,
-  scoreGaming: 0, scoreWork: 0, watt: null,
   stock: 0, status: "active", metaText: "",
   imageFile: null, imagePreview: null, galleryFiles: [],
 };
@@ -116,6 +116,8 @@ const ReceiptIcon = () => (
 );
 
 export function AdminDashboard() {
+  const nav = useNavigate();
+  const { logout, user } = useAuth();
   const [items, setItems] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -156,12 +158,18 @@ export function AdminDashboard() {
     orderFilter === "ALL" ? orders : orders.filter((o) => o.status === orderFilter),
     [orders, orderFilter]);
 
+  async function exportPDF() {
+    await downloadCatalogPdf(filtered, {
+      title: "Catalogo de componentes - Admin",
+      filename: "diamond-grid-components-admin.pdf",
+    });
+  }
+
   function onEdit(c: any) {
     setMode("edit");
     setForm({
       id: c.id, type: c.type, brand: c.brand ?? "", model: c.model ?? "",
-      price: Number(c.price ?? 0), scoreGaming: Number(c.scoreGaming ?? 0),
-      scoreWork: Number(c.scoreWork ?? 0), watt: c.watt ?? null,
+      price: Number(c.price ?? 0),
       stock: Number(c.stock ?? 0), status: c.status === "inactive" ? "inactive" : "active",
       metaText: c.meta ? JSON.stringify(c.meta, null, 2) : "",
       imageFile: null, imagePreview: c.imageUrl ? `${API_BASE}${c.imageUrl}` : null,
@@ -184,9 +192,6 @@ export function AdminDashboard() {
       const fd = new FormData();
       fd.append("type", form.type); fd.append("brand", form.brand.trim());
       fd.append("model", form.model.trim()); fd.append("price", String(Number(form.price)));
-      fd.append("scoreGaming", String(Number(form.scoreGaming)));
-      fd.append("scoreWork", String(Number(form.scoreWork)));
-      if (form.watt !== null && form.watt !== undefined) fd.append("watt", String(Number(form.watt)));
       fd.append("stock", String(Number(form.stock ?? 0))); fd.append("status", form.status);
       if (metaObj !== undefined) fd.append("meta", JSON.stringify(metaObj));
       if (form.imageFile) fd.append("image", form.imageFile);
@@ -240,6 +245,21 @@ export function AdminDashboard() {
     } catch (e: any) { alert(`❌ ${e.message || "Error al actualizar pedido"}`); }
   }
 
+  async function generateInvoice(order: any) {
+    const opened = await openInvoiceWindow(order, {
+      customerName: order.user?.name,
+      customerEmail: order.user?.email,
+    });
+    if (!opened) {
+      alert("No se pudo abrir la factura. Revisa si el navegador bloqueo la ventana emergente.");
+    }
+  }
+
+  function handleLogout() {
+    logout();
+    nav("/", { replace: true });
+  }
+
   const stats = useMemo(() => ({
     total: items.length,
     active: items.filter(i => i.status === "active").length,
@@ -248,12 +268,110 @@ export function AdminDashboard() {
   }), [items, orders]);
 
   return (
-    <Layout>
+    <Layout hideSiteChrome>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
         .adm { font-family: 'Inter', sans-serif; color: #fff; }
         .adm * { box-sizing: border-box; }
+        .adm-shell {
+          display: grid;
+          grid-template-columns: 280px minmax(0, 1fr);
+          gap: 18px;
+          align-items: start;
+        }
+        .adm-sidebar {
+          position: sticky;
+          top: 16px;
+          border-radius: 24px;
+          border: 1px solid rgba(255,255,255,0.08);
+          background: rgba(255,255,255,0.035);
+          backdrop-filter: blur(18px);
+          padding: 18px;
+        }
+        .adm-side-brand {
+          padding-bottom: 14px;
+          border-bottom: 1px solid rgba(255,255,255,0.07);
+          margin-bottom: 14px;
+        }
+        .adm-side-eye {
+          font-size: 10px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: rgba(34,211,238,0.62);
+          font-weight: 700;
+        }
+        .adm-side-title {
+          font-family: 'Syne', sans-serif;
+          font-size: 20px;
+          font-weight: 800;
+          margin-top: 6px;
+        }
+        .adm-side-sub {
+          font-size: 12px;
+          color: rgba(255,255,255,0.38);
+          margin-top: 6px;
+          line-height: 1.6;
+        }
+        .adm-side-nav {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin-top: 14px;
+        }
+        .adm-side-btn {
+          width: 100%;
+          border-radius: 14px;
+          border: 1px solid rgba(255,255,255,0.08);
+          background: rgba(255,255,255,0.03);
+          color: rgba(255,255,255,0.7);
+          padding: 12px 14px;
+          text-align: left;
+          font-size: 13px;
+          font-weight: 600;
+          font-family: 'Inter', sans-serif;
+          cursor: pointer;
+          transition: all 0.18s;
+        }
+        .adm-side-btn:hover { background: rgba(255,255,255,0.06); color: #fff; }
+        .adm-side-btn.active {
+          background: rgba(34,211,238,0.1);
+          border-color: rgba(34,211,238,0.22);
+          color: rgba(34,211,238,0.95);
+          box-shadow: 0 8px 24px rgba(34,211,238,0.08);
+        }
+        .adm-side-box {
+          border-radius: 18px;
+          border: 1px solid rgba(255,255,255,0.07);
+          background: rgba(0,0,0,0.14);
+          padding: 14px;
+          margin-top: 16px;
+        }
+        .adm-side-box-title {
+          font-size: 11px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: rgba(255,255,255,0.34);
+          margin-bottom: 10px;
+          font-weight: 700;
+        }
+        .adm-side-stat {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 12px;
+          color: rgba(255,255,255,0.68);
+          padding: 6px 0;
+        }
+        .adm-side-stat strong {
+          color: rgba(255,255,255,0.92);
+          font-family: 'Syne', sans-serif;
+        }
+        .adm-main { min-width: 0; }
+        @media (max-width: 1080px) {
+          .adm-shell { grid-template-columns: 1fr; }
+          .adm-sidebar { position: static; }
+        }
 
         /* ── HEADER ── */
         .adm-header {
@@ -285,6 +403,61 @@ export function AdminDashboard() {
         }
 
         .adm-subtitle { font-size: 12px; color: rgba(255,255,255,0.35); margin-top: 2px; }
+        .adm-header-right {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+        .adm-user-chip {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          border-radius: 16px;
+          border: 1px solid rgba(255,255,255,0.08);
+          background: rgba(255,255,255,0.04);
+          padding: 10px 12px;
+          min-width: 0;
+        }
+        .adm-user-avatar {
+          width: 34px;
+          height: 34px;
+          border-radius: 11px;
+          background: linear-gradient(135deg, rgba(34,211,238,0.18), rgba(99,102,241,0.18));
+          border: 1px solid rgba(34,211,238,0.2);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 13px;
+          font-weight: 800;
+          color: rgba(255,255,255,0.88);
+          flex-shrink: 0;
+        }
+        .adm-user-meta { min-width: 0; }
+        .adm-user-name {
+          font-size: 12.5px;
+          font-weight: 700;
+          color: rgba(255,255,255,0.9);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 180px;
+        }
+        .adm-user-role {
+          font-size: 10px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: rgba(34,211,238,0.72);
+          margin-top: 2px;
+        }
+        .adm-header-tools {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: flex-end;
+        }
 
         /* ── STATS ── */
         .adm-stats {
@@ -702,30 +875,67 @@ export function AdminDashboard() {
       `}</style>
 
       <div className="adm">
+        <div className="adm-shell">
+          <DashboardSidebar
+            eyebrow="Control Panel"
+            title="Admin Hub"
+            subtitle="Gestion central de catalogo, stock, pedidos y herramientas administrativas."
+            accent="cyan"
+            items={[
+              {
+                key: "components",
+                label: "Catalogo y componentes",
+                icon: "▣",
+                active: activeTab === "components",
+                onClick: () => setActiveTab("components"),
+              },
+              {
+                key: "orders",
+                label: "Pedidos y pagos",
+                icon: "◫",
+                active: activeTab === "orders",
+                onClick: () => setActiveTab("orders"),
+              },
+            ]}
+          />
+
+          <div className="adm-main">
         {/* ── HEADER ── */}
         <div className="adm-header">
           <div>
             <h1 className="adm-title">Admin <span>Dashboard</span></h1>
             <p className="adm-subtitle">Gestiona componentes, stock, pedidos y pagos.</p>
           </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <div className="adm-search-wrap">
-              <span className="adm-search-icon"><SearchIcon /></span>
-              <input
-                value={q}
-                onChange={e => setQ(e.target.value)}
-                placeholder="Buscar componente..."
-              />
+          <div className="adm-header-right">
+            <div className="adm-header-tools">
+              <div className="adm-search-wrap">
+                <span className="adm-search-icon"><SearchIcon /></span>
+                <input
+                  value={q}
+                  onChange={e => setQ(e.target.value)}
+                  placeholder="Buscar componente..."
+                />
+              </div>
+              <select
+                value={typeFilter}
+                onChange={e => setTypeFilter(e.target.value)}
+                className="adm-select"
+                style={{ width: "auto", padding: "9px 14px" }}
+              >
+                <option value="ALL">Todos los tipos</option>
+                {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
             </div>
-            <select
-              value={typeFilter}
-              onChange={e => setTypeFilter(e.target.value)}
-              className="adm-select"
-              style={{ width: "auto", padding: "9px 14px" }}
-            >
-              <option value="ALL">Todos los tipos</option>
-              {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
+            <div className="adm-user-chip">
+              <div className="adm-user-avatar">{(user?.name || "A")[0].toUpperCase()}</div>
+              <div className="adm-user-meta">
+                <div className="adm-user-name">{user?.name || "Administrador"}</div>
+                <div className="adm-user-role">Admin</div>
+              </div>
+              <button className="adm-btn adm-btn-danger adm-btn-sm" onClick={handleLogout}>
+                <XIcon /> Cerrar sesion
+              </button>
+            </div>
           </div>
         </div>
 
@@ -822,21 +1032,6 @@ export function AdminDashboard() {
                       <div>
                         <label className="adm-label">Stock</label>
                         <input type="number" className="adm-input" value={form.stock} onChange={e => setForm(s => ({ ...s, stock: Number(e.target.value) }))} />
-                      </div>
-                    </div>
-
-                    <div className="adm-grid-3">
-                      <div>
-                        <label className="adm-label">Gaming</label>
-                        <input type="number" className="adm-input" value={form.scoreGaming} onChange={e => setForm(s => ({ ...s, scoreGaming: Number(e.target.value) }))} />
-                      </div>
-                      <div>
-                        <label className="adm-label">Work</label>
-                        <input type="number" className="adm-input" value={form.scoreWork} onChange={e => setForm(s => ({ ...s, scoreWork: Number(e.target.value) }))} />
-                      </div>
-                      <div>
-                        <label className="adm-label">Watt</label>
-                        <input type="number" className="adm-input" placeholder="—" value={form.watt ?? ""} onChange={e => setForm(s => ({ ...s, watt: e.target.value === "" ? null : Number(e.target.value) }))} />
                       </div>
                     </div>
 
@@ -1033,6 +1228,9 @@ export function AdminDashboard() {
                     )}
 
                     <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+                      <button className="adm-btn adm-btn-ghost adm-btn-sm" onClick={() => void generateInvoice(order)}>
+                        <ReceiptIcon /> Generar factura
+                      </button>
                       <button className="adm-btn adm-btn-success adm-btn-sm" onClick={() => changeOrderStatus(order.id, "PAID")}>
                         <CheckIcon /> Aprobar pago
                       </button>
@@ -1078,6 +1276,11 @@ export function AdminDashboard() {
               }}>
               Export CSV
             </button>
+            <button className="adm-btn adm-btn-ghost" onClick={exportPDF}>
+              Export PDF
+            </button>
+          </div>
+        </div>
           </div>
         </div>
       </div>

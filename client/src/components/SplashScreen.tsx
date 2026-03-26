@@ -303,7 +303,7 @@ export function SplashScreen({ onFinish }: Props) {
         }
 
         .sp-logo-img {
-          width: 130px;
+          width: 168px;
           max-width: 100%;
           filter: drop-shadow(0 0 18px rgba(34,211,238,0.5));
           animation: sp-logo-pulse 3s ease-in-out infinite;

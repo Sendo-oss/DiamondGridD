@@ -55,6 +55,13 @@ const CheckIcon = () => (
   </svg>
 );
 
+const PASSWORD_RULES = [
+  { id: "length", label: "Minimo 8 caracteres", test: (value: string) => value.length >= 8 },
+  { id: "upper", label: "Al menos 1 letra mayuscula", test: (value: string) => /[A-Z]/.test(value) },
+  { id: "number", label: "Al menos 1 numero", test: (value: string) => /[0-9]/.test(value) },
+  { id: "symbol", label: "Al menos 1 simbolo especial", test: (value: string) => /[^A-Za-z0-9]/.test(value) },
+] as const;
+
 // ─── Password strength ─────────────────────────────────────────────────────────
 
 function getPasswordStrength(password: string) {
@@ -117,6 +124,7 @@ export function RegisterPage() {
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [legalModal, setLegalModal] = useState<"terms" | "privacy" | null>(null);
 
   const [err, setErr] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -126,6 +134,11 @@ export function RegisterPage() {
   const nav = useNavigate();
 
   const strength = useMemo(() => getPasswordStrength(password), [password]);
+  const passwordChecks = useMemo(
+    () => PASSWORD_RULES.map(rule => ({ ...rule, ok: rule.test(password) })),
+    [password]
+  );
+  const passwordIsValid = passwordChecks.every(rule => rule.ok);
   const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
 
   function validateEmail(v: string) {
@@ -137,7 +150,7 @@ export function RegisterPage() {
     if (!email.trim()) return "Ingresa tu correo electrónico.";
     if (!validateEmail(email)) return "Ingresa un correo electrónico válido.";
     if (!password.trim()) return "Ingresa una contraseña.";
-    if (password.length < 8) return "La contraseña debe tener al menos 8 caracteres.";
+    if (!passwordIsValid) return "La contraseña debe cumplir todos los requisitos de seguridad.";
     if (!confirmPassword.trim()) return "Confirma tu contraseña.";
     if (password !== confirmPassword) return "Las contraseñas no coinciden.";
     if (!acceptTerms) return "Debes aceptar los términos y condiciones.";
@@ -167,7 +180,7 @@ export function RegisterPage() {
   }
 
   return (
-    <Layout>
+    <Layout hideSiteChrome>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap');
 
@@ -488,6 +501,44 @@ export function RegisterPage() {
           margin-top: 4px;
         }
 
+        .pw-rules {
+          margin-top: 10px;
+          display: grid;
+          gap: 7px;
+        }
+
+        .pw-rule {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          font-size: 11px;
+          color: rgba(255,255,255,0.28);
+        }
+
+        .pw-rule-dot {
+          width: 16px;
+          height: 16px;
+          border-radius: 999px;
+          border: 1px solid rgba(255,255,255,0.12);
+          background: rgba(255,255,255,0.04);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          color: transparent;
+          transition: all 0.2s ease;
+        }
+
+        .pw-rule.ok {
+          color: rgba(94,234,212,0.86);
+        }
+
+        .pw-rule.ok .pw-rule-dot {
+          border-color: rgba(45,212,191,0.45);
+          background: rgba(45,212,191,0.16);
+          color: rgba(94,234,212,0.95);
+        }
+
         /* Match hint */
         .match-hint {
           font-size: 11px;
@@ -551,6 +602,29 @@ export function RegisterPage() {
         }
 
         .rp-checkbox-text a:hover { color: rgba(34,211,238,1); }
+
+        .rp-legal-link {
+          appearance: none;
+          background: none;
+          border: none;
+          padding: 0;
+          cursor: pointer;
+          color: rgba(34,211,238,0.7);
+          font: inherit;
+        }
+
+        .rp-legal-link:hover { color: rgba(34,211,238,1); }
+
+        .rp-legal-note {
+          margin-top: 10px;
+          padding: 12px 14px;
+          border-radius: 14px;
+          border: 1px solid rgba(255,255,255,0.06);
+          background: rgba(255,255,255,0.025);
+          font-size: 12px;
+          color: rgba(255,255,255,0.4);
+          line-height: 1.6;
+        }
 
         /* Alert */
         .rp-alert {
@@ -665,6 +739,100 @@ export function RegisterPage() {
         }
 
         .rp-login-row a:hover { color: rgba(34,211,238,1); }
+
+        .rp-legal-modal {
+          position: fixed;
+          inset: 0;
+          z-index: 80;
+          background: rgba(3,7,18,0.8);
+          backdrop-filter: blur(14px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+        }
+
+        .rp-legal-card {
+          width: min(680px, 100%);
+          max-height: min(86vh, 760px);
+          overflow: auto;
+          border-radius: 24px;
+          border: 1px solid rgba(255,255,255,0.08);
+          background: linear-gradient(180deg, rgba(17,24,39,0.97), rgba(8,15,30,0.98));
+          box-shadow: 0 32px 96px rgba(0,0,0,0.45);
+          padding: 28px 24px 24px;
+        }
+
+        .rp-legal-top {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 16px;
+        }
+
+        .rp-legal-kicker {
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: rgba(34,211,238,0.6);
+          margin-bottom: 8px;
+        }
+
+        .rp-legal-title {
+          font-family: 'Syne', sans-serif;
+          font-size: 24px;
+          font-weight: 800;
+          letter-spacing: -0.03em;
+        }
+
+        .rp-legal-subtitle {
+          margin-top: 8px;
+          font-size: 13px;
+          color: rgba(255,255,255,0.42);
+          line-height: 1.6;
+        }
+
+        .rp-legal-close {
+          border: 1px solid rgba(255,255,255,0.08);
+          background: rgba(255,255,255,0.04);
+          color: rgba(255,255,255,0.7);
+          width: 38px;
+          height: 38px;
+          border-radius: 12px;
+          cursor: pointer;
+        }
+
+        .rp-legal-body {
+          margin-top: 20px;
+          display: grid;
+          gap: 16px;
+        }
+
+        .rp-legal-section {
+          border-radius: 18px;
+          border: 1px solid rgba(255,255,255,0.06);
+          background: rgba(255,255,255,0.03);
+          padding: 16px 18px;
+        }
+
+        .rp-legal-section h4 {
+          margin: 0 0 8px;
+          font-size: 13px;
+          color: rgba(255,255,255,0.9);
+        }
+
+        .rp-legal-section p,
+        .rp-legal-section li {
+          font-size: 12.5px;
+          color: rgba(255,255,255,0.56);
+          line-height: 1.7;
+        }
+
+        .rp-legal-section ul {
+          margin: 0;
+          padding-left: 18px;
+        }
       `}</style>
 
       <div className="rp-root">
@@ -833,9 +1001,16 @@ export function RegisterPage() {
                         </p>
                       </>
                     )}
-                    {password.length === 0 && (
-                      <p className="rp-hint">Mínimo 8 caracteres.</p>
-                    )}
+                    <div className="pw-rules">
+                      {passwordChecks.map(rule => (
+                        <div key={rule.id} className={`pw-rule ${rule.ok ? "ok" : ""}`}>
+                          <span className="pw-rule-dot">
+                            <CheckIcon />
+                          </span>
+                          <span>{rule.label}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="rp-field">
@@ -876,9 +1051,27 @@ export function RegisterPage() {
                     </div>
                     <span className="rp-checkbox-text">
                       Acepto los{" "}
-                      <a href="#" onClick={e => e.stopPropagation()}>términos y condiciones</a>
+                      <button
+                        type="button"
+                        className="rp-legal-link"
+                        onClick={e => {
+                          e.stopPropagation();
+                          setLegalModal("terms");
+                        }}
+                      >
+                        términos y condiciones
+                      </button>
                       {" "}y la{" "}
-                      <a href="#" onClick={e => e.stopPropagation()}>política de privacidad</a>.
+                      <button
+                        type="button"
+                        className="rp-legal-link"
+                        onClick={e => {
+                          e.stopPropagation();
+                          setLegalModal("privacy");
+                        }}
+                      >
+                        política de privacidad
+                      </button>.
                     </span>
                   </div>
 
@@ -893,6 +1086,9 @@ export function RegisterPage() {
                       Quiero recibir promociones, stock nuevo y lanzamientos de Diamond Grid.
                     </span>
                   </div>
+                </div>
+                <div className="rp-legal-note">
+                  Al crear tu cuenta aceptas un uso responsable de la plataforma, el tratamiento de tus datos para operar pedidos y el envío de comunicaciones solo si marcas la casilla de novedades.
                 </div>
               </div>
 
@@ -918,6 +1114,82 @@ export function RegisterPage() {
           </div>
         </div>
       </div>
+
+      {legalModal && (
+        <div className="rp-legal-modal" onClick={() => setLegalModal(null)}>
+          <div className="rp-legal-card" onClick={e => e.stopPropagation()}>
+            <div className="rp-legal-top">
+              <div>
+                <div className="rp-legal-kicker">Diamond Grid</div>
+                <div className="rp-legal-title">
+                  {legalModal === "terms" ? "Terminos y condiciones" : "Politica de privacidad"}
+                </div>
+                <p className="rp-legal-subtitle">
+                  {legalModal === "terms"
+                    ? "Resumen claro de las condiciones de uso para compras, cuentas y pedidos dentro de la plataforma."
+                    : "Resumen del tratamiento de datos personales necesario para operar tu cuenta y tus pedidos."}
+                </p>
+              </div>
+              <button type="button" className="rp-legal-close" onClick={() => setLegalModal(null)}>
+                X
+              </button>
+            </div>
+
+            <div className="rp-legal-body">
+              {legalModal === "terms" ? (
+                <>
+                  <div className="rp-legal-section">
+                    <h4>Uso de la cuenta</h4>
+                    <p>
+                      Tu cuenta es personal y debes mantener segura tu contrasena. La informacion registrada debe ser real y actualizada para procesar pedidos, soporte y facturacion.
+                    </p>
+                  </div>
+                  <div className="rp-legal-section">
+                    <h4>Compras y pedidos</h4>
+                    <ul>
+                      <li>Los pedidos quedan sujetos a validacion de stock, pago y confirmacion administrativa.</li>
+                      <li>Los precios y promociones pueden cambiar sin previo aviso antes de confirmar la compra.</li>
+                      <li>Los comprobantes subidos deben corresponder al pedido realizado.</li>
+                    </ul>
+                  </div>
+                  <div className="rp-legal-section">
+                    <h4>Conducta y uso responsable</h4>
+                    <ul>
+                      <li>No debes usar la plataforma para fraude, suplantacion o cargas de archivos maliciosos.</li>
+                      <li>Podemos suspender cuentas con actividad sospechosa o incumplimiento de estas condiciones.</li>
+                    </ul>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="rp-legal-section">
+                    <h4>Datos que recopilamos</h4>
+                    <p>
+                      Podemos almacenar nombre, correo, telefono, datos de perfil, pedidos, comprobantes y actividad necesaria para brindarte acceso, soporte y seguimiento de compras.
+                    </p>
+                  </div>
+                  <div className="rp-legal-section">
+                    <h4>Para que usamos tus datos</h4>
+                    <ul>
+                      <li>Crear y administrar tu cuenta.</li>
+                      <li>Procesar compras, pagos, envios y facturas.</li>
+                      <li>Contactarte por soporte, seguridad o recuperacion de acceso.</li>
+                      <li>Enviar promociones solo si aceptas comunicaciones opcionales.</li>
+                    </ul>
+                  </div>
+                  <div className="rp-legal-section">
+                    <h4>Proteccion y control</h4>
+                    <ul>
+                      <li>No usamos tus datos para fines ajenos a la operacion de la plataforma.</li>
+                      <li>Puedes solicitar actualizar datos de perfil y dejar de recibir novedades promocionales.</li>
+                    </ul>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

@@ -284,22 +284,14 @@ export function ComponentPage() {
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                <p className="text-xs text-white/60">Gaming</p>
-                <p className="font-semibold">{Number(item.scoreGaming ?? 0)}</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                <p className="text-xs text-white/60">Work</p>
-                <p className="font-semibold">{Number(item.scoreWork ?? 0)}</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                <p className="text-xs text-white/60">Watts</p>
-                <p className="font-semibold">{item.watt ? `${item.watt}W` : "—"}</p>
-              </div>
+            <div className="mt-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                 <p className="text-xs text-white/60">Estado</p>
                 <p className="font-semibold">{item.status ?? "active"}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                <p className="text-xs text-white/60">Tipo</p>
+                <p className="font-semibold">{item.type ?? "Componente"}</p>
               </div>
             </div>
 

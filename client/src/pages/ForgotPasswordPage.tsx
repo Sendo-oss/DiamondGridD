@@ -43,7 +43,7 @@ export function ForgotPasswordPage() {
   }
 
   return (
-    <Layout>
+    <Layout hideSiteChrome>
       <section className="mx-auto max-w-2xl">
         <div className="overflow-hidden rounded-3xl border border-cyan-400/10 bg-ink-900/60 shadow-[0_0_60px_rgba(34,211,238,0.08)] backdrop-blur">
           <div className="relative overflow-hidden border-b border-white/10 px-6 py-8 sm:px-8">

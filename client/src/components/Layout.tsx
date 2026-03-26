@@ -5,7 +5,13 @@ import { useCart } from "../app/cart";
 import { API_BASE } from "../lib/api";
 import { AnimatedBackground } from "./AnimatedBackground";
 
-export function Layout({ children }: { children: ReactNode }) {
+export function Layout({
+  children,
+  hideSiteChrome = false,
+}: {
+  children: ReactNode;
+  hideSiteChrome?: boolean;
+}) {
   const { user, logout } = useAuth();
   const nav = useNavigate();
   const location = useLocation();
@@ -136,6 +142,20 @@ export function Layout({ children }: { children: ReactNode }) {
         }
         .lyt-topbar-link:hover { color: rgba(255,255,255,0.85); }
 
+        .lyt-topbar-link.map {
+          padding: 6px 12px;
+          border-radius: 999px;
+          border: 1px solid rgba(34,211,238,0.18);
+          background: rgba(34,211,238,0.08);
+          color: rgba(125,211,252,0.92);
+          font-weight: 600;
+        }
+        .lyt-topbar-link.map:hover {
+          color: rgba(255,255,255,0.96);
+          background: rgba(34,211,238,0.16);
+          border-color: rgba(34,211,238,0.3);
+        }
+
         .lyt-topbar-badge {
           display: flex;
           align-items: center;
@@ -187,7 +207,7 @@ export function Layout({ children }: { children: ReactNode }) {
           grid-template-columns: auto 1fr auto;
           align-items: center;
           gap: 16px;
-          height: 68px;
+          height: 82px;
         }
 
         /* Logo */
@@ -200,7 +220,7 @@ export function Layout({ children }: { children: ReactNode }) {
         }
 
 .lyt-logo img {
-  height: 86px;
+  height: 118px;
   width: auto;
   object-fit: contain;
   filter: brightness(1.4) drop-shadow(0 0 16px rgba(34,211,238,0.6));
@@ -414,6 +434,8 @@ export function Layout({ children }: { children: ReactNode }) {
 
         @media (max-width: 768px) {
           .lyt-nav-inner { grid-template-columns: auto 1fr auto; }
+          .lyt-nav-inner { height: 74px; }
+          .lyt-logo img { height: 92px; }
           .lyt-search { display: none; }
           .lyt-navbar-inner { display: none; }
           .lyt-mobile-toggle { display: flex; }
@@ -517,6 +539,16 @@ export function Layout({ children }: { children: ReactNode }) {
         .lyt-drawer-link:hover { background: rgba(255,255,255,0.06); color: #fff; }
         .lyt-drawer-link.active { background: rgba(34,211,238,0.07); color: rgba(34,211,238,0.9); }
         .lyt-drawer-link.accent { color: rgba(251,191,36,0.85); }
+        .lyt-drawer-link.map {
+          border: 1px solid rgba(34,211,238,0.16);
+          background: rgba(34,211,238,0.08);
+          color: rgba(125,211,252,0.92);
+          font-weight: 600;
+        }
+        .lyt-drawer-link.map:hover {
+          background: rgba(34,211,238,0.14);
+          color: rgba(255,255,255,0.96);
+        }
 
         /* ── FOOTER ── */
         .lyt-footer {
@@ -601,11 +633,21 @@ export function Layout({ children }: { children: ReactNode }) {
       `}</style>
 
       {/* ── TOP BAR ── */}
+      {!hideSiteChrome && (
+        <>
       <div className="lyt-topbar relative z-10">
         <div className="lyt-topbar-inner">
           <div className="lyt-topbar-links">
             <Link to="/about" className="lyt-topbar-link">Preguntas frecuentes</Link>
             <Link to="/contact" className="lyt-topbar-link">Contacto</Link>
+            <a
+              href="https://www.google.com/maps/search/?api=1&query=Frente%20a%20la%20parada%20El%20Flor%C3%B3n%2C%20Av.%2010%20de%20Agosto%2034-97%20y%2C%20Quito%20170508"
+              target="_blank"
+              rel="noreferrer"
+              className="lyt-topbar-link map"
+            >
+              Como llegar
+            </a>
 
           </div>
           <div className="lyt-topbar-badge">
@@ -740,6 +782,14 @@ export function Layout({ children }: { children: ReactNode }) {
           <div className="lyt-drawer-divider" />
           <Link to="/about" className="lyt-drawer-link">Preguntas frecuentes</Link>
           <Link to="/contact" className="lyt-drawer-link">Contacto</Link>
+          <a
+            href="https://www.google.com/maps/search/?api=1&query=Frente%20a%20la%20parada%20El%20Flor%C3%B3n%2C%20Av.%2010%20de%20Agosto%2034-97%20y%2C%20Quito%20170508"
+            target="_blank"
+            rel="noreferrer"
+            className="lyt-drawer-link map"
+          >
+            Como llegar
+          </a>
 
           {!user ? (
             <>
@@ -767,11 +817,15 @@ export function Layout({ children }: { children: ReactNode }) {
       </div>
 
       {/* ── MAIN CONTENT ── */}
-      <main className="relative z-10 mx-auto w-full max-w-[1400px] px-6 py-8 lyt">
+        </>
+      )}
+
+      <main className={`relative z-10 mx-auto w-full lyt ${hideSiteChrome ? "max-w-[1600px] px-4 py-6 md:px-6" : "max-w-[1400px] px-6 py-8"}`}>
         {children}
       </main>
 
       {/* ── FOOTER ── */}
+      {!hideSiteChrome && (
       <footer className="lyt-footer relative z-10 lyt">
         <div className="lyt-footer-inner">
           <div className="lyt-footer-brand">
@@ -779,6 +833,18 @@ export function Layout({ children }: { children: ReactNode }) {
             <p className="lyt-footer-tagline">
               Componentes de calidad para gamers, estudiantes y creadores de contenido en Ecuador.
             </p>
+            <p className="lyt-footer-tagline" style={{ marginTop: 10 }}>
+              Frente a la parada El Floron, Av. 10 de Agosto 34-97 y, Quito 170508
+            </p>
+            <a
+              href="https://www.google.com/maps/search/?api=1&query=Frente%20a%20la%20parada%20El%20Flor%C3%B3n%2C%20Av.%2010%20de%20Agosto%2034-97%20y%2C%20Quito%20170508"
+              target="_blank"
+              rel="noreferrer"
+              className="lyt-footer-link"
+              style={{ marginTop: 10, display: "inline-flex", width: "fit-content" }}
+            >
+              Ver ubicacion
+            </a>
           </div>
 
           <div>
@@ -812,6 +878,7 @@ export function Layout({ children }: { children: ReactNode }) {
           </span>
         </div>
       </footer>
+      )}
     </div>
   );
 }

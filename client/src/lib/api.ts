@@ -62,7 +62,14 @@ export async function authLogin(payload: { email: string; password: string }) {
   return r.json();
 }
 
-export async function authRegister(payload: { name: string; email: string; password: string }) {
+export async function authRegister(payload: {
+  name: string;
+  username?: string;
+  email: string;
+  phone?: string;
+  password: string;
+  receiveNews?: boolean;
+}) {
   const r = await fetch(`${API}/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -277,7 +284,7 @@ export async function resetPassword(token: string, password: string) {
   const r = await fetch(`${API}/auth/reset-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token, password }),
+    body: JSON.stringify({ token, newPassword: password }),
   });
   return r.json();
 }

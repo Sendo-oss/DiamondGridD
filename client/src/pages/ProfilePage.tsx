@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Layout } from "../components/Layout";
 import { fetchMe, updateMe, uploadAvatar, API_BASE, fetchMyOrders } from "../lib/api";
 import { useAuth } from "../app/auth";
+import { openInvoiceWindow } from "../lib/invoice";
 
 type Me = {
   id: string;
@@ -121,6 +122,16 @@ export default function ProfilePage() {
     const updated = await uploadAvatar(file);
     setMe(updated.user);
     if (token) login({ user: updated.user, token });
+  }
+
+  async function generateInvoice(order: any) {
+    const opened = await openInvoiceWindow(order, {
+      customerName: me?.name || authUser?.name,
+      customerEmail: me?.email || authUser?.email,
+    });
+    if (!opened) {
+      alert("No se pudo abrir la factura. Revisa si el navegador bloqueo la ventana emergente.");
+    }
   }
 
   const role = me?.role || authUser?.role || "user";
@@ -535,6 +546,10 @@ export default function ProfilePage() {
           text-decoration: none;
           transition: background 0.15s, color 0.15s;
         }
+        button.prof-receipt-link {
+          font-family: 'Inter', sans-serif;
+          cursor: pointer;
+        }
         .prof-receipt-link:hover { background: rgba(255,255,255,0.08); color: #fff; }
 
         .prof-empty {
@@ -767,16 +782,26 @@ export default function ProfilePage() {
                         </div>
                       </div>
 
-                      {order.payment?.receiptUrl && (
-                        <a
-                          href={`${API_BASE}${order.payment.receiptUrl}`}
-                          target="_blank"
-                          rel="noreferrer"
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+                        <button
+                          type="button"
+                          onClick={() => void generateInvoice(order)}
                           className="prof-receipt-link"
                         >
-                          <ReceiptIcon /> Ver comprobante
-                        </a>
-                      )}
+                          <ReceiptIcon /> Generar factura
+                        </button>
+
+                        {order.payment?.receiptUrl && (
+                          <a
+                            href={`${API_BASE}${order.payment.receiptUrl}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="prof-receipt-link"
+                          >
+                            <ReceiptIcon /> Ver comprobante
+                          </a>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
